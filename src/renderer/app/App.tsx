@@ -1,4 +1,4 @@
-﻿import { useEffect } from "react";
+import { useEffect } from "react";
 import { useBootstrap, useRoute } from "../lib/hooks.ts";
 import { bridge } from "../lib/bridge.ts";
 import { playClip } from "../lib/audio.ts";

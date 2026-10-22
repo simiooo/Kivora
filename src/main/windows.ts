@@ -1,8 +1,9 @@
-import { BrowserWindow, app, screen } from "electron";
+import { BrowserWindow, screen } from "electron";
 import path from "node:path";
 import { IPC } from "../shared/ipc.ts";
 import { pendingApprovals } from "./repos/approvals.ts";
 import { getConfig } from "./repos/config.ts";
+import { appIcon } from "./paths.ts";
 
 /**
  * 三个窗口：
@@ -53,7 +54,7 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 620,
     show: false,
     backgroundColor: "#151615",
-    icon: path.join(app.getAppPath(), "docs", "assets", "icon", "kivora.ico"),
+    icon: appIcon(),
     titleBarStyle: "hidden",
     titleBarOverlay: { color: "#151615", symbolColor: "#6f6b64", height: 44 },
     webPreferences: {

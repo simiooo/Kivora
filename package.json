@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Voice-first desktop agent for Windows, built on Pi",
+  "author": "Kivora contributors",
   "license": "MIT",
   "type": "module",
   "main": "dist-electron/main.cjs",
@@ -16,6 +17,8 @@
     "smoke": "node scripts/build.mjs && vite build && node scripts/launch.mjs --smoke",
     "shots": "node scripts/build.mjs && vite build && node scripts/launch.mjs --shots",
     "flow": "node scripts/build.mjs && node scripts/launch.mjs --flow",
+    "dist": "node scripts/build.mjs && vite build && electron-builder --win --x64",
+    "dist:dir": "node scripts/build.mjs && vite build && electron-builder --win --x64 --dir",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm test && pnpm flow"
@@ -35,9 +38,11 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
+    "tslib": "^2.8.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"

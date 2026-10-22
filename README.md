@@ -1,4 +1,4 @@
-﻿# Kivora
+# Kivora
 
 <img src="docs/assets/icon/kivora-256.png" width="88" alt="Kivora" />
 
@@ -34,6 +34,24 @@
 | 引导 | ✅ | 三步：连模型 / 麦克风与热键 / 完成 |
 | 浏览器控制（CUA） | ⛔ | 未接。说"帮我搜一下"会得到一条明确的失败和"现在能做什么" |
 | Pi 会话执行 | ✅ 可选 | 设置里切「Pi 会话」后，任务走 `pi -p --mode json`；**Pi 自己的工具不受审批总线管**，默认关闭 |
+
+## 装上试
+
+安装包在 `release/Kivora-0.1.0-x64.exe`（NSIS，约 110 MB；未签名，Windows 会提示"未知发布者"，
+点「更多信息 → 仍要运行」即可）。装完从开始菜单或桌面打开，热键默认 `Ctrl+Alt+Space`。
+
+自己出安装包：
+
+```bash
+pnpm install
+pnpm dist        # release/Kivora-<version>-x64.exe
+pnpm dist:dir    # 只出免安装目录 release/win-unpacked/
+```
+
+安装包要求 Windows 10/11 x64；数据在 `%APPDATA%\kivora`，卸载不会删。
+
+> 本机排查小贴士：如果环境里设置了 `ELECTRON_RUN_AS_NODE=1`（有些 Node 工具链会设），
+> 打包后的 exe 会以纯 Node 模式启动并报 `bad option`。`pnpm start` / `pnpm dev` 会自动清掉它。
 
 ## 跑起来
 
@@ -98,7 +116,7 @@ Windows 凭据管理器（DPAPI）        # API Key，只存密文
 
 1. **CUA 没接**：浏览器与桌面控制在 D5 之后，目前只有文件整理是真的。
 2. **Pi 执行器是可选开关**：默认走内置执行器；切到 Pi 会话后审批总线覆盖不到 Pi 的工具，只建议在可信机器上开。
-3. **打包没做**：还没有安装包，`pnpm start` 跑构建产物。
+3. **安装包未签名**：会触发 SmartScreen，需要手动放行；自动更新没做。
 4. **真端点没连过**：没有 Key，所以 ASR/TTS/chat 的真实链路只做了代码与错误路径，未做端到端压测。
 5. **G3 一律手动**：装软件、UAC、支付、凭据只出卡片，不开语音（设置里可以强开，不建议）。
 
@@ -110,10 +128,10 @@ Windows 凭据管理器（DPAPI）        # API Key，只存密文
 
 | 阶段 | 内容 |
 |---|---|
-| v0.1 ✅ | UI 全量、模型仓库、录音转写、审批总线、队列、历史、真实文件整理 |
-| v0.2 | `pi --mode rpc` 执行器 + 工具白名单；CUA（cua-driver bounded） |
-| v0.3 | Playwright 场景、作用域授权的完整生命周期、成本面板 |
-| v1.0 | 安装包、自动更新、三场景 10 连跑验收 |
+| v0.1 ✅ | UI 全量、模型仓库、录音转写、审批总线、队列、历史、真实文件整理、Pi 执行器（可选）、NSIS 安装包 |
+| v0.2 | CUA（cua-driver bounded）+ 浏览器场景；Pi 工具白名单与审批桥 |
+| v0.3 | 作用域授权全生命周期、成本面板、自动更新 |
+| v1.0 | 三场景 10 连跑验收、代码签名 |
 
 ## 许可
 

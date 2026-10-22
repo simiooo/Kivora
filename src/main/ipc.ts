@@ -1,4 +1,4 @@
-﻿import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { IPC, type ModelPreset } from "../shared/ipc.ts";
 import type { AppConfig, ApprovalResolution, ModuleKey, OverlayState } from "../shared/domain.ts";

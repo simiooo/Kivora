@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowUpRight, Mic } from "lucide-react";
 import type { OverlayState } from "@shared/domain.ts";
 import { STATE_LABELS } from "@shared/domain.ts";

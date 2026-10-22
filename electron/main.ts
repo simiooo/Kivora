@@ -1,4 +1,4 @@
-﻿import { app, BrowserWindow, globalShortcut } from "electron";
+import { app, BrowserWindow, globalShortcut } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { IPC } from "../src/shared/ipc.ts";
@@ -23,11 +23,23 @@ import { expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
 import { appendMessage, countSessions, listSessions } from "../src/main/repos/sessions.ts";
 import { seedDemoData } from "../src/main/demo.ts";
 
-const isShots = process.argv.includes("--shots");
-const isFlow = process.argv.includes("--flow");
-const isSmoke = process.argv.includes("--smoke") || isShots;
+const isShots = process.argv.includes("--shots") || process.env.KIVORA_SHOTS === "1";
+const isFlow = process.argv.includes("--flow") || process.env.KIVORA_FLOW === "1";
+const isSmoke = process.argv.includes("--smoke") || process.env.KIVORA_SMOKE === "1" || isShots;
 
 let currentHotkey = "";
+
+// 打包后没有控制台，留一条启动记录方便排查"点了没反应"
+function bootLog(message: string): void {
+  try {
+    const file = path.join(app.getPath("temp"), "kivora-boot.log");
+    fs.appendFileSync(file, `${new Date().toISOString()} ${message}\n`);
+  } catch {
+    // 日志失败不影响启动
+  }
+}
+
+bootLog(`boot v${app.getVersion()} packaged=${app.isPackaged} argv=${JSON.stringify(process.argv.slice(1))}`);
 let hideTimer: NodeJS.Timeout | null = null;
 
 if (isShots || isFlow || isSmoke) {

@@ -1,4 +1,4 @@
-﻿import type { SessionState } from "../shared/domain.ts";
+import type { SessionState } from "../shared/domain.ts";
 import { handleUtterance, cancelTaskById } from "./dispatcher/index.ts";
 import { getSession, listEvents as listSessionEvents, listTimeline } from "./repos/sessions.ts";
 import { pendingApprovals, getApproval } from "./repos/approvals.ts";

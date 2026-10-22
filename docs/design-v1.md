@@ -1,4 +1,4 @@
-﻿# Kivora 设计稿 v1
+# Kivora 设计稿 v1
 
 十四块画板。源文件 `docs/assets/kivora-design-v1.fig`，改稿在 OpenPencil 里改，重新导出即可（**只导 PNG，按 id 小范围导**）。
 

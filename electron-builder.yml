@@ -1,0 +1,43 @@
+appId: dev.kivora.app
+productName: Kivora
+copyright: Copyright © 2026 Kivora contributors
+
+directories:
+  output: release
+  buildResources: build
+
+# 主进程已由 esbuild 打包成单个 main.cjs，渲染层由 Vite 构建，
+# 所以安装包里不需要 node_modules（electron-builder 会自动带上生产依赖，忽略即可）。
+files:
+  - dist
+  - dist-electron
+  - package.json
+  - LICENSE
+  - "!**/*.map"
+
+asar: true
+
+extraResources:
+  - from: docs/assets/icon/kivora.ico
+    to: icon.ico
+
+win:
+  icon: docs/assets/icon/kivora.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Kivora
+  deleteAppDataOnUninstall: false
+  uninstallDisplayName: Kivora
+
+# 关掉自动发布：v0.1 只出本地安装包
+publish: null
