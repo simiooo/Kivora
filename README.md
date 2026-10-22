@@ -1,5 +1,7 @@
 # Kivora
 
+<img src="docs/assets/icon/kivora-256.png" width="88" alt="Kivora" />
+
 **Voice-first desktop agent for Windows, built on [Pi](https://github.com/earendil-works/pi).**
 
 按住热键说一句话，Kivora 开一个独立会话，用 CUA 在你的电脑上把事做完，再用一句话告诉你结果。

@@ -18,6 +18,7 @@ function createWindow(): void {
     minHeight: 560,
     show: false,
     backgroundColor: "#151615",
+    icon: path.join(app.getAppPath(), "docs", "assets", "icon", "kivora.ico"),
     titleBarStyle: "hidden",
     titleBarOverlay: { color: "#151615", symbolColor: "#bdbbb3", height: 40 },
     webPreferences: {
