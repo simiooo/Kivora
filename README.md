@@ -42,6 +42,12 @@ Main (Electron 45 / Node 24)
 - 存储用 Node 内置 `node:sqlite`，**没有原生模块**，不需要 electron-rebuild。
 - 设计令牌复用栗记（Nuto）的「极简」语言，见 [docs/DESIGN-NOTES.md](docs/DESIGN-NOTES.md)。
 
+## 设计稿
+
+八块画板（时间线、运行中、设置抽屉、onboarding、会话历史、桌面悬浮、未处理队列、设置页）。索引与实现映射见 [docs/design-v1.md](docs/design-v1.md)，源文件 `docs/assets/kivora-design-v1.fig`。
+
+![主时间线](docs/assets/design-01-timeline.png)
+
 ## 路线
 
 | 天 | 内容 |
