@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Copy, ExternalLink, Play, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, Copy, ExternalLink, Play, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import type { Bootstrap } from "@shared/ipc.ts";
-import type { AppConfig, Grant } from "@shared/domain.ts";
+import type { AppConfig, Grant, McpCapability, McpPreset, McpServerView } from "@shared/domain.ts";
 import { displayPath, formatHotkey, formatRelative, formatTime } from "@shared/text.ts";
 import { bridge, toUiError } from "../lib/bridge.ts";
 import { useLiveData } from "../lib/hooks.ts";
 import { cn } from "../lib/utils.ts";
-import { Button, Chip, Empty, Field, Input, ToggleRow, useToast } from "../components/ui.tsx";
+import { Button, Chip, Dot, Empty, Field, Input, SectionLabel, ToggleRow, useToast } from "../components/ui.tsx";
 import { ModelsPanel } from "../components/models-panel.tsx";
 
 const NAV: Array<{ label: string; route: string; key: string }> = [
   { label: "通用", route: "/settings", key: "general" },
   { label: "模型", route: "/settings/models", key: "models" },
   { label: "语音", route: "/settings/voice", key: "voice" },
+  { label: "扩展", route: "/settings/extensions", key: "extensions" },
   { label: "权限", route: "/settings/permissions", key: "permissions" },
   { label: "关于", route: "/settings/about", key: "about" },
 ];
@@ -74,9 +75,10 @@ export function SettingsPage({
           {active === "models" ? <ModelsPanel /> : null}
           {active === "general" ? <GeneralSection bootstrap={bootstrap} onConfig={onConfig} /> : null}
           {active === "voice" ? <VoiceSection bootstrap={bootstrap} onConfig={onConfig} /> : null}
+          {active === "extensions" ? <ExtensionsSection /> : null}
           {active === "permissions" ? <PermissionsSection bootstrap={bootstrap} onConfig={onConfig} /> : null}
           {active === "about" ? <AboutSection bootstrap={bootstrap} /> : null}
-          {!["models", "general", "voice", "permissions", "about"].includes(active) ? (
+          {!["models", "general", "voice", "extensions", "permissions", "about"].includes(active) ? (
             <Empty title="没有这一页" hint="从左边选一个设置项。" />
           ) : null}
         </div>
@@ -408,8 +410,185 @@ function VoiceSection({
   );
 }
 
-/* ------------------------------------------------------------- 权限 */
+/* ------------------------------------------------------------- 扩展 */
 
+function ExtensionsSection(): React.JSX.Element {
+  const toast = useToast();
+  const [servers, setServers] = useState<McpServerView[]>([]);
+  const [cap, setCap] = useState<McpCapability | null>(null);
+  const [presets, setPresets] = useState<McpPreset[]>([]);
+  const [name, setName] = useState("");
+  const [command, setCommand] = useState("npx");
+  const [args, setArgs] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    void Promise.all([bridge.listMcpServers(), bridge.mcpCapability(), bridge.mcpPresets()])
+      .then(([list, capability, presetList]) => {
+        setServers(list);
+        setCap(capability);
+        setPresets(presetList);
+      })
+      .catch((err) => toast.push({ tone: "error", title: "读不到扩展配置", detail: toUiError(err).message }));
+    // 只在进这一页时读一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const apply = async (action: () => Promise<McpServerView[]>, okTitle: string): Promise<void> => {
+    try {
+      setServers(await action());
+      toast.push({ tone: "success", title: okTitle, detail: "Pi 任务会话启动时会自动加载这些服务器。" });
+    } catch (err) {
+      toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message });
+    }
+  };
+
+  const addPreset = (preset: McpPreset): void => {
+    const exists = servers.find((server) => server.name === `kivora-${preset.server.name}`);
+    void apply(
+      () => bridge.saveMcpServer(preset.server, exists?.name),
+      exists ? `已更新「${preset.label}」` : `已添加「${preset.label}」`,
+    );
+  };
+
+  const addCustom = (): void => {
+    const parsedArgs = args
+      .split(/\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    void apply(
+      () =>
+        bridge.saveMcpServer({
+          name: name.trim() || "custom",
+          command: command.trim(),
+          args: parsedArgs,
+          env: {},
+          enabled: true,
+        }),
+      "已保存自定义服务器",
+    ).then(() => {
+      setName("");
+      setArgs("");
+    });
+  };
+
+  const remove = (serverName: string): void => {
+    void apply(() => bridge.deleteMcpServer(serverName), "已删除");
+  };
+
+  return (
+    <div>
+      <SectionHeader
+        title="扩展能力"
+        subtitle="CUA 和浏览器不自己造：交给 Pi 的 MCP 扩展，Kivora 只负责写配置。"
+      />
+
+      <div className="mb-4 rounded-[16px] bg-card px-5 py-4">
+        <div className="flex items-start gap-3">
+          <span className="mt-1.5">
+            <Dot tone={cap?.available ? "positive" : "danger"} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] text-foreground">
+              {cap ? (cap.available ? "Pi 支持 MCP" : "Pi 还不支持 MCP") : "正在检查…"}
+            </div>
+            <p className="mt-1 text-[12px] leading-5 text-faint">{cap?.reason}</p>
+            {cap ? (
+              <p className="mt-1 truncate font-mono text-[11px] text-faint">{displayPath(cap.file, 64)}</p>
+            ) : null}
+          </div>
+          {cap && !cap.available ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard.writeText("pi update self");
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1400);
+              }}
+            >
+              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {copied ? "已复制" : "复制更新命令"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      <SectionLabel>已配置的服务器</SectionLabel>
+      <div className="space-y-2">
+        {servers.map((server) => (
+          <div key={server.name} className="rounded-[12px] bg-card px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[12px] text-foreground">{server.name}</span>
+              <Chip tone={server.managed ? "neutral" : "muted"}>{server.managed ? "Kivora 写的" : "别处配的"}</Chip>
+              <span className="text-[11px] text-faint">{server.enabled ? "启用" : "已停用"}</span>
+              {server.managed ? (
+                <Button variant="ghost" size="sm" className="ml-auto" onClick={() => remove(server.name)}>
+                  删除
+                </Button>
+              ) : (
+                <span className="ml-auto text-[11px] text-faint">不在 Kivora 里改</span>
+              )}
+            </div>
+            <p className="mt-1 truncate font-mono text-[11px] text-faint">
+              {server.command} {server.args.join(" ")}
+            </p>
+            {server.description ? (
+              <p className="mt-0.5 truncate text-[11px] text-faint">{server.description}</p>
+            ) : null}
+          </div>
+        ))}
+        {servers.length === 0 ? (
+          <p className="rounded-[12px] bg-card px-4 py-5 text-[12px] text-faint">
+            还没有服务器。加一个桌面控制或浏览器，Pi 会话就能用它们。
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {presets.map((preset) => (
+          <Button key={preset.key} variant="secondary" size="sm" onClick={() => addPreset(preset)}>
+            <Plus className="size-3.5" /> {preset.label}
+          </Button>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] leading-5 text-faint">
+        {presets.map((preset) => `${preset.label}：${preset.hint}`).join("；")}
+      </p>
+
+      <div className="mt-6">
+        <SectionLabel>自定义 stdio 服务器</SectionLabel>
+        <div className="grid grid-cols-[120px_1fr_auto] gap-2">
+          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="名字" className="h-9 text-[12px]" />
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              value={command}
+              onChange={(event) => setCommand(event.target.value)}
+              placeholder="命令"
+              className="h-9 font-mono text-[12px]"
+            />
+            <Input
+              value={args}
+              onChange={(event) => setArgs(event.target.value)}
+              placeholder="参数，空格分隔"
+              className="h-9 font-mono text-[12px]"
+            />
+          </div>
+          <Button variant="primary" size="sm" onClick={addCustom} disabled={!command.trim()}>
+            添加
+          </Button>
+        </div>
+      </div>
+
+      <p className="mt-6 rounded-[12px] bg-sunken px-4 py-3 text-[11px] leading-5 text-faint">
+        MCP 工具也在 pi 的工具循环里：点击、输入、打开这类动作会经 Kivora 的权限扩展先问你，读页面和截图不问。cua-driver 另有 bounded 模式兜底。
+        浏览器只用来读页面时风险较低。真正需要"动手"的操作，建议还是走内置执行器的审批。
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- 权限 */
 function PermissionsSection({
   bootstrap,
   onConfig,

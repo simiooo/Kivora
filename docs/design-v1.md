@@ -83,9 +83,10 @@
 | 05 历史 | `pages/HistoryPage.tsx` |
 | 06 悬浮 | `src/renderer/overlay/OverlayApp.tsx` + `overlay.html` |
 | 07 队列 | `components/queue-panel.tsx` |
-| 08 设置页 | `pages/SettingsPage.tsx`（通用 / 模型 / 语音 / 权限 / 关于） |
+| 08 设置页 | `pages/SettingsPage.tsx`（通用 / 模型 / 语音 / 扩展 / 权限 / 关于） |
 | 09 权限浮窗 | `src/renderer/permission/PermissionApp.tsx` + `permission.html`，数据来自 `src/main/dispatcher/approval-bus.ts` |
 | 12 / 13 模型仓库 | `components/models-panel.tsx`、`components/model-editor.tsx` |
+| （新增）扩展 | `SettingsPage.tsx` 的「扩展」页：CUA / 浏览器走 Pi 的 MCP 配置 |
 | 14 阅读器 | `components/reader.tsx` |
 
 窗口：`src/main/windows.ts`（主窗 / 悬浮 / 权限，三个入口）。样式令牌：`src/renderer/styles.css`。

@@ -12,7 +12,7 @@ import {
   resumeTaskById,
 } from "./dispatcher/index.ts";
 import { cancelRun } from "./dispatcher/runner.ts";
-import { cancelPiRun } from "./dispatcher/pi-runner.ts";
+import { cancelPiRun, compactPiSession } from "./dispatcher/pi-runner.ts";
 import {
   deleteSession,
   getSession,
@@ -37,6 +37,7 @@ import {
   updateModel,
 } from "./repos/models.ts";
 import { getSecret, modelSecretName } from "./secrets.ts";
+import { listServers, mcpCapability, MCP_PRESETS, removeServer, saveServer } from "./mcp.ts";
 import { probeModel } from "./providers/probe.ts";
 import { synthesizeSpeech, transcribeAudio } from "./voice.ts";
 import { broadcast } from "./bus.ts";
@@ -80,6 +81,15 @@ const modelDraftSchema = z.object({
   params: paramsSchema,
   headers: z.array(headerPair).max(12),
   apiKey: z.string().max(500).nullable().optional(),
+});
+
+const mcpServerSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  command: z.string().trim().min(1).max(200),
+  args: z.array(z.string().max(300)).max(20),
+  env: z.record(z.string().max(80), z.string().max(500)),
+  enabled: z.boolean(),
+  description: z.string().max(200).optional(),
 });
 
 const configPatchSchema = z.object({
@@ -209,6 +219,14 @@ export function registerIpc(deps: IpcDeps): void {
 
   handle(IPC.sessionResume, (_event, raw) => resumeTaskById(parse(sessionId, raw)));
 
+  handle(IPC.sessionCompact, async (_event, raw) => {
+    const id = parse(sessionId, raw);
+    const result = await compactPiSession(id);
+    if (!result) throw new AppError("conflict", { message: "只有正在跑的 Pi 会话能压缩。" });
+    broadcast("sessions");
+    return result;
+  });
+
   handle(IPC.sessionDelete, (_event, raw) => {
     const id = parse(sessionId, raw);
     cancelRun(id);
@@ -316,6 +334,27 @@ export function registerIpc(deps: IpcDeps): void {
   });
 
   handle(IPC.modelsPresets, (): ModelPreset[] => PRESETS);
+
+  /* ------------------------------------------------------------- MCP */
+
+  handle(IPC.mcpList, () => listServers());
+
+  handle(IPC.mcpSave, (_event, raw, rawName) => {
+    const input = parse(mcpServerSchema, raw);
+    const previous = typeof rawName === "string" && rawName ? rawName : undefined;
+    const next = saveServer(input, previous);
+    broadcast("config");
+    return next;
+  });
+
+  handle(IPC.mcpDelete, (_event, raw) => {
+    const next = removeServer(parse(z.string().min(1).max(60), raw));
+    broadcast("config");
+    return next;
+  });
+
+  handle(IPC.mcpCapability, () => mcpCapability());
+  handle(IPC.mcpPresets, () => MCP_PRESETS);
 
   /* --------------------------------------------------------- 授权 */
 

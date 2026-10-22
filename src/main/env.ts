@@ -1,32 +1,44 @@
 import { exec } from "node:child_process";
 
 /**
- * 启动时探一次 Pi CLI 在不在：在的话日后可以把任务会话直接交给
- * `pi --mode rpc` 跑（5.1）；不在就用内置执行器，并让设置页如实显示。
+ * 启动时探一次 Pi CLI：版本、以及有没有 MCP 扩展（--help 里有 `mcp` 命令）。
+ * 探测结果只用于 UI 展示与能力判断，不阻断启动。
  */
 
 let piVersion: string | null = null;
+let piHelp: string | null = null;
 let checked = false;
 
-export function detectPi(): Promise<void> {
-  if (checked) return Promise.resolve();
-  checked = true;
+function run(command: string): Promise<string | null> {
   return new Promise((resolve) => {
-    exec("pi --version", { timeout: 4000, windowsHide: true }, (err, stdout) => {
-      if (err) {
-        piVersion = null;
-      } else {
-        const match = stdout.trim().match(/\d+\.\d+\.\d+/);
-        piVersion = match ? match[0] : stdout.trim().slice(0, 20) || null;
-      }
-      console.log(`[kivora] pi ${piVersion ?? "not found"}`);
-      resolve();
+    exec(command, { timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024 }, (err, stdout) => {
+      if (err) resolve(null);
+      else resolve(String(stdout));
     });
   });
 }
 
+export async function detectPi(): Promise<void> {
+  if (checked) return;
+  checked = true;
+  const bin = process.env.KIVORA_PI_BIN || "pi";
+  const versionOut = await run(`"${bin}" --version`);
+  if (versionOut) {
+    const match = versionOut.trim().match(/\d+\.\d+\.\d+/);
+    piVersion = match ? match[0] : versionOut.trim().slice(0, 20) || null;
+  }
+  if (piVersion) {
+    piHelp = await run(`"${bin}" --help`);
+  }
+  console.log(`[kivora] pi ${piVersion ?? "not found"} mcp=${piHelp ? /^\s+mcp\b/m.test(piHelp) : "?"}`);
+}
+
 export function getPiVersion(): string | null {
   return piVersion;
+}
+
+export function getPiHelp(): string | null {
+  return piHelp;
 }
 
 export function piAvailable(): boolean {

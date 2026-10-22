@@ -69,6 +69,7 @@ const api: KivoraBridge = {
   retryTask: (id, mode) => invoke(IPC.sessionRetry, id, mode),
   resumeTask: (id) => invoke(IPC.sessionResume, id),
   deleteSession: (id) => invoke(IPC.sessionDelete, id),
+  compactTask: (id) => invoke(IPC.sessionCompact, id),
 
   listApprovals: () => invoke(IPC.approvalsList),
   answerApproval: (id, resolution) => invoke(IPC.approvalsAnswer, id, resolution),
@@ -86,6 +87,12 @@ const api: KivoraBridge = {
   listBindings: () => invoke(IPC.modelsBindings),
   bindModel: (module, modelId) => invoke(IPC.modelsBind, module, modelId),
   modelPresets: () => invoke(IPC.modelsPresets),
+
+  listMcpServers: () => invoke(IPC.mcpList),
+  saveMcpServer: (input, name) => invoke(IPC.mcpSave, input, name),
+  deleteMcpServer: (name) => invoke(IPC.mcpDelete, name),
+  mcpCapability: () => invoke(IPC.mcpCapability),
+  mcpPresets: () => invoke(IPC.mcpPresets),
 
   listGrants: () => invoke(IPC.grantsList),
   revokeGrants: (sessionId) => invoke(IPC.grantsRevoke, sessionId),

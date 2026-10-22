@@ -20,6 +20,8 @@ asar: true
 extraResources:
   - from: docs/assets/icon/kivora.ico
     to: icon.ico
+  - from: resources/kivora-permission.ts
+    to: kivora-permission.ts
 
 win:
   icon: docs/assets/icon/kivora.ico

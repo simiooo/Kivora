@@ -131,6 +131,7 @@ async function runShots(): Promise<void> {
     ["/settings/models", "shot-03-models.png"],
     [invoice ? `/history/${invoice.id}` : "/history", "shot-04-history.png"],
     ["/onboarding", "shot-05-onboarding.png"],
+    ["/settings/extensions", "shot-11-extensions.png"],
   ];
   for (const [route, file] of routes) {
     await loadRoute(win, route);

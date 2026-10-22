@@ -17,7 +17,7 @@ import { enqueue, promoteQueued, takeNextQueued, listQueue } from "../repos/queu
 import { currentApproval, answerById, cancelApprovalsForSession } from "./approval-bus.ts";
 import { route, renderStatus, type RouterContext } from "./router.ts";
 import { cancelRun, isRunning, pickScenario, startTask } from "./runner.ts";
-import { cancelPiRun, isPiRunning } from "./pi-runner.ts";
+import { cancelPiRun, isPiRunning, steerPiRun } from "./pi-runner.ts";
 import { piAvailable } from "../env.ts";
 import { broadcast, speak } from "../bus.ts";
 import { getConfig } from "../repos/config.ts";
@@ -89,6 +89,12 @@ function taskIsRunning(id: string): boolean {
   return isRunning(id) || isPiRunning(id);
 }
 
+function currentMode(): "mock" | "real" | "pi" {
+  const config = getConfig();
+  if (config.mockMode) return "mock";
+  return config.taskRuntime === "pi" && piAvailable() ? "pi" : "real";
+}
+
 function launch(sessionId: string): void {
   const session = getSession(sessionId);
   if (!session) return;
@@ -96,9 +102,7 @@ function launch(sessionId: string): void {
   setSessionError(sessionId, null);
   appendEvent(sessionId, "queued", `开始执行：${session.title}`);
   broadcast("sessions");
-  const config = getConfig();
-  const mode = config.mockMode ? "mock" : config.taskRuntime === "pi" && piAvailable() ? "pi" : "real";
-  startTask(session, { onFinish: () => pump() }, mode);
+  startTask(session, { onFinish: () => pump() }, currentMode());
 }
 
 /** 有排队且没有在跑的，就启动下一条 */
@@ -216,7 +220,7 @@ export async function handleUtterance(
         return { messages: turn.messages, action: { kind: "none" }, spoken: null };
       }
       if (intent.mode === "restart") {
-        const fresh = createSession({ title: session.title, prompt: session.prompt, runner: "mock" });
+        const fresh = createSession({ title: session.title, prompt: session.prompt, runner: currentMode() === "pi" ? "pi" : "mock" });
         lastReferenced = fresh.id;
         launch(fresh.id);
         say(turn, `重开了一个：${fresh.title}。`);
@@ -308,6 +312,10 @@ export async function handleUtterance(
         say(turn, "当前会话不在了。");
         return { messages: turn.messages, action: { kind: "none" }, spoken: null };
       }
+      if (isPiRunning(session.id) && steerPiRun(session.id, intent.text)) {
+        say(turn, "插了一句，它这轮做完就接着说。");
+        return { messages: turn.messages, action: { kind: "steered", sessionId: session.id }, spoken: null };
+      }
       enqueue(session.id, intent.text, "steer");
       appendEvent(session.id, "note", `插话：${intent.text}`, { kind: "steer" });
       say(turn, "插了一句，它这轮做完就接着说。");
@@ -324,7 +332,7 @@ export async function handleUtterance(
     case "create_task": {
       const running = findRunningSession();
       const title = makeTitle(intent.text);
-      const session = createSession({ title, prompt: intent.text, runner: "mock" });
+      const session = createSession({ title, prompt: intent.text, runner: currentMode() === "pi" ? "pi" : "mock" });
       attachMessageToSession(user.id, session.id);
       lastReferenced = session.id;
 
@@ -396,7 +404,7 @@ export function retryTaskById(id: string, mode: "continue" | "restart"): void {
   if (!session) throw new AppError("not_found", { message: "这个任务已经不在了。" });
   if (taskIsRunning(id)) throw new AppError("conflict", { message: "它还在跑。" });
   if (mode === "restart") {
-    const fresh = createSession({ title: session.title, prompt: session.prompt, runner: "mock" });
+    const fresh = createSession({ title: session.title, prompt: session.prompt, runner: currentMode() === "pi" ? "pi" : "mock" });
     lastReferenced = fresh.id;
     launch(fresh.id);
     return;

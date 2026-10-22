@@ -8,6 +8,10 @@ import type {
   Grant,
   Message,
   ModelDraft,
+  McpCapability,
+  McpPreset,
+  McpServerInput,
+  McpServerView,
   ModelRecord,
   ModuleKey,
   OverlayState,
@@ -31,6 +35,10 @@ export type {
   Grant,
   Message,
   ModelDraft,
+  McpCapability,
+  McpPreset,
+  McpServerInput,
+  McpServerView,
   ModelRecord,
   ModuleKey,
   OverlayState,
@@ -77,6 +85,7 @@ export const IPC = {
   sessionRetry: "kivora:sessions:retry",
   sessionResume: "kivora:sessions:resume",
   sessionDelete: "kivora:sessions:delete",
+  sessionCompact: "kivora:sessions:compact",
 
   approvalsList: "kivora:approvals:list",
   approvalsAnswer: "kivora:approvals:answer",
@@ -94,6 +103,11 @@ export const IPC = {
   modelsBindings: "kivora:models:bindings",
   modelsBind: "kivora:models:bind",
   modelsPresets: "kivora:models:presets",
+  mcpList: "kivora:mcp:list",
+  mcpSave: "kivora:mcp:save",
+  mcpDelete: "kivora:mcp:delete",
+  mcpCapability: "kivora:mcp:capability",
+  mcpPresets: "kivora:mcp:presets",
   grantsList: "kivora:grants:list",
   grantsRevoke: "kivora:grants:revoke",
   openExternal: "kivora:shell:open",
@@ -133,6 +147,7 @@ export interface KivoraBridge {
   retryTask(id: string, mode: "continue" | "restart"): Promise<void>;
   resumeTask(id: string): Promise<void>;
   deleteSession(id: string): Promise<void>;
+  compactTask(id: string): Promise<{ before: number; after: number }>;
 
   listApprovals(): Promise<Approval[]>;
   answerApproval(id: string, resolution: ApprovalResolution): Promise<Approval>;
@@ -150,6 +165,12 @@ export interface KivoraBridge {
   listBindings(): Promise<Binding[]>;
   bindModel(module: ModuleKey, modelId: string | null): Promise<Binding[]>;
   modelPresets(): Promise<ModelPreset[]>;
+
+  listMcpServers(): Promise<McpServerView[]>;
+  saveMcpServer(input: McpServerInput, name?: string): Promise<McpServerView[]>;
+  deleteMcpServer(name: string): Promise<McpServerView[]>;
+  mcpCapability(): Promise<McpCapability>;
+  mcpPresets(): Promise<McpPreset[]>;
 
   listGrants(): Promise<Grant[]>;
   revokeGrants(sessionId?: string): Promise<void>;

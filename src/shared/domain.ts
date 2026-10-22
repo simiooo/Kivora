@@ -414,6 +414,36 @@ export interface SessionDetail {
 
 /* ------------------------------------------------------------ 悬浮卡 */
 
+/** CUA / 浏览器这类能力走 Pi 的 MCP 扩展，Kivora 只管理配置 */
+export interface McpServerInput {
+  name: string;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  enabled: boolean;
+  description?: string;
+}
+
+export interface McpServerView extends McpServerInput {
+  /** 是不是 Kivora 写进去的（只有这些允许从 UI 删） */
+  managed: boolean;
+  available: boolean | null;
+}
+
+export interface McpCapability {
+  pi: string | null;
+  available: boolean;
+  reason: string;
+  file: string;
+}
+
+export interface McpPreset {
+  key: string;
+  label: string;
+  hint: string;
+  server: McpServerInput;
+}
+
 export interface OverlayState {
   listening: boolean;
   pendingApproval: Approval | null;

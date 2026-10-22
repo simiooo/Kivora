@@ -11,6 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DEFAULT_PARAMS } from "../shared/domain.ts";
+import { compactPiSession } from "./dispatcher/pi-runner.ts";
 
 /**
  * `--flow`：不开窗口，直接把调度器跑一遍。
@@ -227,16 +228,39 @@ export async function runFlow(): Promise<number> {
   fs.writeFileSync(
     fakeJs,
     [
-      "const lines = [",
-      '  { type: "session", version: 3, id: "fake", timestamp: new Date().toISOString(), cwd: process.cwd() },',
-      '  { type: "turn_start" },',
-      '  { type: "tool_execution_start", toolName: "list", args: { path: "~/Downloads" } },',
-      '  { type: "tool_execution_end", toolName: "list", isError: false },',
-      '  { type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "看过了，3 个文件。" }] } },',
-      '  { type: "agent_end", messages: [{ role: "assistant", content: "看过了，3 个文件。" }] },',
-      "];",
-      "for (const line of lines) console.log(JSON.stringify(line));",
-      "process.exit(0);",
+      "// 假 pi：RPC 模式，验证 prompt / 审批 / compact / abort 四条路径",
+      'const readline = require("node:readline");',
+      "const send = (o) => process.stdout.write(JSON.stringify(o) + '\\n');",
+      'const rl = readline.createInterface({ input: process.stdin });',
+      'let prompted = false;',
+      'rl.on("line", (line) => {',
+      "  let cmd;",
+      "  try { cmd = JSON.parse(line); } catch { return; }",
+      '  if (cmd.type === "prompt") {',
+      '    send({ type: "response", id: cmd.id, command: "prompt", success: true });',
+      "    prompted = true;",
+      '    send({ type: "turn_start" });',
+      '    send({ type: "tool_execution_start", toolName: "bash", args: { command: "rm -rf build" } });',
+      '    send({ type: "tool_execution_end", toolName: "bash", isError: false });',
+      '    send({ type: "extension_ui_request", id: "ui-1", method: "confirm", title: "Kivora：这条命令有风险", message: "rm -rf build" });',
+      "    return;",
+      "  }",
+      '  if (cmd.type === "compact") {',
+      '    send({ type: "response", id: cmd.id, command: "compact", success: true, data: { tokensBefore: 1200, estimatedTokensAfter: 240 } });',
+      "    return;",
+      "  }",
+      '  if (cmd.type === "steer" || cmd.type === "follow_up") {',
+      '    send({ type: "response", id: cmd.id, command: cmd.type, success: true });',
+      "    return;",
+      "  }",
+      '  if (cmd.type === "extension_ui_response") {',
+      '    send({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "看过了，3 个文件。" }] } });',
+      '    send({ type: "agent_settled" });',
+      "    return;",
+      "  }",
+      '  if (cmd.type === "abort") { process.exit(0); }',
+      "});",
+      'setInterval(() => { if (prompted) return; }, 1000).unref();',
     ].join("\n"),
     "utf8",
   );
@@ -248,8 +272,16 @@ export async function runFlow(): Promise<number> {
 
   const piTurn = await handleUtterance("帮我看一下下载目录", { source: "voice" });
   const piId = piTurn.action.kind === "task_created" ? piTurn.action.sessionId : null;
+  const piAsked = await waitFor("等 Pi 的审批", () => pendingApprovals().some((item) => item.tool === "pi.tool_call"), 8000);
+  check("Pi 的工具调用进了审批总线", piAsked, pendingApprovals()[0]?.title ?? "");
+
+  // 压缩：趁会话还在等审批时手动压一次
+  const compacted = piId ? await compactPiSession(piId).catch(() => null) : null;
+  check("Pi 会话能手动压缩", compacted?.before === 1200 && compacted?.after === 240, JSON.stringify(compacted));
+
+  await handleUtterance("可以", { source: "voice" });
   const piDone = await waitFor("等 Pi 会话结束", () => piId !== null && stateOf(piId) === "done", 10_000);
-  check("Pi 会话跑通", piDone, piId ? (stateOf(piId) ?? "?") : "—");
+  check("Pi 会话跑通（RPC）", piDone, piId ? (stateOf(piId) ?? "?") : "—");
   check(
     "Pi 的结论进了会话摘要",
     piId !== null && (getSession(piId)?.status.summary ?? "").includes("看过了"),

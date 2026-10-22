@@ -196,6 +196,12 @@ export function HistoryPage({
                   .then(() => toast.push({ tone: "info", title: "已开始接着做" }))
                   .catch((err) => toast.push({ tone: "error", title: "续做失败", detail: toUiError(err).message }));
               }}
+              onCompact={() => {
+                void bridge
+                  .compactTask(detail.data!.session.id)
+                  .then((result) => toast.push({ tone: "success", title: `压缩完成：${result.before} → ${result.after} tokens` }))
+                  .catch((err) => toast.push({ tone: "error", title: "压缩失败", detail: toUiError(err).message }));
+              }}
               onExport={exportSession}
               onDelete={() => (confirmDelete ? void remove() : setConfirmDelete(true))}
               confirmDelete={confirmDelete}
@@ -213,6 +219,7 @@ function SessionView({
   onRetry,
   onResume,
   onExport,
+  onCompact,
   onDelete,
   confirmDelete,
   onBack,
@@ -221,6 +228,7 @@ function SessionView({
   onRetry: (mode: "continue" | "restart") => void;
   onResume: () => void;
   onExport: () => void;
+  onCompact: () => void;
   onDelete: () => void;
   confirmDelete: boolean;
   onBack: () => void;
@@ -238,7 +246,8 @@ function SessionView({
         <Chip tone={STATE_TONE[session.state]}>{STATE_LABELS[session.state]}</Chip>
       </div>
       <p className="mb-5 pl-8 text-[12px] text-faint">
-        {session.id} · {formatFullTime(session.createdAt)} · {formatDuration(session.status.elapsedMs)}
+        {session.id} · {session.runner === "pi" ? "Pi 会话" : "内置执行器"} · {formatFullTime(session.createdAt)} ·{" "}
+        {formatDuration(session.status.elapsedMs)}
         {session.status.artifacts.length ? ` · ${session.status.artifacts.length} 个文件` : ""}
         {session.tokensIn + session.tokensOut > 0
           ? ` · ${((session.tokensIn + session.tokensOut) / 1000).toFixed(1)}k tokens`
@@ -324,6 +333,11 @@ function SessionView({
             <RotateCcw className="size-3.5" /> 重试
           </Button>
         )}
+        {session.runner === "pi" && active ? (
+          <Button variant="secondary" size="sm" onClick={onCompact}>
+            压缩
+          </Button>
+        ) : null}
         <Button variant="secondary" size="sm" onClick={onExport}>
           <Download className="size-3.5" /> 导出
         </Button>
