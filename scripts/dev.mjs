@@ -52,7 +52,7 @@ const waitForServer = (url, timeoutMs = 30000) =>
   });
 
 await waitForServer("http://localhost:5173");
-const electron = run("pnpm", ["exec", "electron", "."], { VITE_DEV_SERVER_URL: "http://localhost:5173" });
+const electron = run("node", ["scripts/launch.mjs"], { VITE_DEV_SERVER_URL: "http://localhost:5173" });
 
 const shutdown = () => {
   for (const child of children) child.kill();
