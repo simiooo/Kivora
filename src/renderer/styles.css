@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+/* Kivora 的设计令牌直接复用栗记（Nuto）的「极简」语言：
+   暖灰中性色 + 单一强调色 acorn（"此刻"）+ 只给浮层阴影 + 大而连续的圆角。
+   来源：squirrel_mem_web_ui/docs/DESIGN.md、src/styles.css。
+   差异：Kivora 是桌面常驻工具，默认深色；acorn 用于"正在听/正在做"。 */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --shadow-float:
+    0 12px 40px rgb(0 0 0 / 0.28), 0 2px 8px rgb(0 0 0 / 0.18);
+  --shadow-dialog:
+    0 24px 64px rgb(0 0 0 / 0.36), 0 2px 8px rgb(0 0 0 / 0.18);
+}
+
+@theme inline {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  --color-faint: var(--faint);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-acorn: var(--acorn);
+  --color-acorn-container: var(--acorn-container);
+  --color-positive: var(--positive);
+  --color-positive-container: var(--positive-container);
+  --color-destructive-container: var(--destructive-container);
+  --color-surface-highest: var(--surface-highest);
+  --color-select: var(--select);
+  --color-sunken: var(--sunken);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+
+  /* 圆角：8 小件 / 12 输入 / 18 区块 / 22 浮层 / 32 对话框 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-2xl: 32px;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #262522;
+  --card: #ffffff;
+  --card-foreground: #262522;
+  --popover: #ffffff;
+  --popover-foreground: #262522;
+  --primary: #262522;
+  --primary-foreground: #ffffff;
+  --secondary: #eceae5;
+  --secondary-foreground: #262522;
+  --muted: #f4f3f0;
+  --muted-foreground: #68655f;
+  --accent: #f4f3f0;
+  --accent-foreground: #262522;
+  --destructive: #ae3e35;
+  --border: #eae8e3;
+  --input: #f4f3f0;
+  --ring: #6f6b64;
+  --faint: #6f6b64;
+  --hairline-strong: #cac7bf;
+  --acorn: #76543e;
+  --acorn-container: #f0eae4;
+  --destructive-container: #faf1ef;
+  --positive: #38654e;
+  --positive-container: #e8f1eb;
+  --surface-highest: #e3e1db;
+  --sunken: #f8f8f6;
+  --select: #eceae5;
+}
+
+.dark {
+  --background: #151615;
+  --foreground: #f2f1ec;
+  --card: #20221f;
+  --card-foreground: #f2f1ec;
+  --popover: #20221f;
+  --popover-foreground: #f2f1ec;
+  --primary: #f2f1ec;
+  --primary-foreground: #151615;
+  --secondary: #30332e;
+  --secondary-foreground: #f2f1ec;
+  --muted: #292c28;
+  --muted-foreground: #bdbbb3;
+  --accent: #292c28;
+  --accent-foreground: #f2f1ec;
+  --destructive: #ffa69c;
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 8%);
+  --ring: #8d8a83;
+  --faint: #9a978f;
+  --hairline-strong: #4a4d47;
+  --acorn: #d9b79a;
+  --acorn-container: #33291f;
+  --destructive-container: #2e1d1b;
+  --positive: #a6c9b4;
+  --positive-container: #1c2a22;
+  --surface-highest: #3a3d38;
+  --sunken: #191b18;
+  --select: #30332e;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    /* 桌面工具不做页面级滚动条闪烁 */
+    overflow: hidden;
+  }
+  ::selection {
+    background: var(--acorn-container);
+    color: var(--foreground);
+  }
+}
