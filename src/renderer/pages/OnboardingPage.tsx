@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Mic, PlugZap } from "lucide-react";
 import type { Bootstrap } from "@shared/ipc.ts";
 import type { AppConfig, ModelRecord } from "@shared/domain.ts";
@@ -96,7 +96,10 @@ export function OnboardingPage({
           <div className="mt-10 flex items-center gap-3">
             <button
               type="button"
-              onClick={() => void onSkip()}
+              onClick={() => {
+                if (step < STEPS.length - 1) setStep((value) => value + 1);
+                else void onSkip();
+              }}
               className="text-[12px] text-faint hover:text-foreground"
             >
               跳过这一步
@@ -148,6 +151,8 @@ function ConnectStep({
     setResult(null);
     try {
       const saved = await bridge.saveModel({
+        // 重复点「测试连接」不应该堆出一堆同名模型
+        id: model?.id,
         name: modelId.trim() || "主模型",
         provider: "openai",
         capability: "chat",

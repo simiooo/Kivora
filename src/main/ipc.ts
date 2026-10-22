@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { IPC, type ModelPreset } from "../shared/ipc.ts";
 import type { AppConfig, ApprovalResolution, ModuleKey, OverlayState } from "../shared/domain.ts";
@@ -103,6 +103,16 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
     throw new AppError("invalid_input", { detail });
   }
   return result.data;
+}
+
+/** 用户手写的热键要归一化：Electron 只认 Control，不认 Ctrl */
+export function normalizeAccelerator(input: string): string {
+  return input
+    .replace(/\bctrl\b/gi, "Control")
+    .replace(/\bcmd\b/gi, "Command")
+    .replace(/⌘/g, "Command")
+    .replace(/\s+/g, "")
+    .replace(/\+{2,}/g, "+");
 }
 
 function encodeError(err: unknown): Error {
@@ -325,12 +335,15 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.configSet, (_event, raw) => {
     const patch = parse(configPatchSchema, raw) as Partial<AppConfig>;
     const next = setConfig(patch);
+    if (typeof patch.launchAtLogin === "boolean") {
+      app.setLoginItemSettings({ openAtLogin: patch.launchAtLogin });
+    }
     broadcast("config");
     return next;
   });
 
   handle(IPC.configHotkey, (_event, raw) => {
-    const accelerator = parse(z.string().trim().min(1).max(80), raw);
+    const accelerator = normalizeAccelerator(parse(z.string().trim().min(1).max(80), raw));
     const applied = deps.applyHotkey(accelerator);
     if (!applied.ok) {
       throw new AppError("invalid_input", { message: "这个热键被别的程序占用了，换一个。" });

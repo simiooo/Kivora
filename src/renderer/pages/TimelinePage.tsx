@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { History, Settings2, Sparkles } from "lucide-react";
 import type { Bootstrap, Message, Session } from "@shared/ipc.ts";
 import type { ApprovalResolution, SessionEvent } from "@shared/domain.ts";
@@ -33,6 +33,8 @@ export function TimelinePage({
   const [events, setEvents] = useState<Record<string, SessionEvent[]>>({});
   const [reader, setReader] = useState<{ text: string; title: string; ts: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const nearBottom = useRef(true);
+  const userScrolled = useRef(false);
 
   const messages = useLiveData<Message[]>(() => bridge.listTimeline(120), ["timeline"]);
   const tasks = useLiveData<Session[]>(() => bridge.listActiveTasks(), ["sessions"]);
@@ -58,7 +60,7 @@ export function TimelinePage({
 
   useEffect(() => {
     const element = scrollRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
+    if (element && nearBottom.current) element.scrollTop = element.scrollHeight;
   }, [messages.data?.length]);
 
   const loadEvents = useCallback(async (sessionId: string) => {
@@ -158,7 +160,22 @@ export function TimelinePage({
         <Banner text={configIssue.text} actionLabel={configIssue.action} onAction={() => navigate("/settings")} />
       ) : null}
 
-      <main ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <main
+        ref={scrollRef}
+        onWheel={() => {
+          userScrolled.current = true;
+        }}
+        onPointerDown={() => {
+          userScrolled.current = true;
+        }}
+        onScroll={() => {
+          const element = scrollRef.current;
+          if (!element || !userScrolled.current) return;
+          // 只有本来就贴着底部时才自动跟随，免得把人正在读的长文顶走
+          nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+        }}
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
         <div className="mx-auto w-full max-w-[820px] px-8 pb-6 pt-1">
           {messages.loading && messages.data === null ? (
             <div className="py-20 text-center text-[12px] text-faint">正在读时间线…</div>

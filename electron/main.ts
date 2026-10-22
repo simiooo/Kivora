@@ -17,7 +17,7 @@ import {
   refreshPermissionWindow,
   showOverlay,
 } from "../src/main/windows.ts";
-import { markListening, registerIpc } from "../src/main/ipc.ts";
+import { markListening, normalizeAccelerator, registerIpc } from "../src/main/ipc.ts";
 import { setBroadcastHook } from "../src/main/bus.ts";
 import { expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
 import { appendMessage, countSessions, listSessions } from "../src/main/repos/sessions.ts";
@@ -231,7 +231,8 @@ app.whenReady().then(async () => {
     },
   });
 
-  const hotkey = getConfig().hotkey;
+  const hotkey = normalizeAccelerator(getConfig().hotkey);
+  app.setLoginItemSettings({ openAtLogin: getConfig().launchAtLogin });
   registerHotkey(hotkey);
   createMainWindow();
 
