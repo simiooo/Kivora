@@ -1,9 +1,10 @@
-import { app, BrowserWindow, globalShortcut } from "electron";
+﻿import { app, BrowserWindow, globalShortcut } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { IPC } from "../src/shared/ipc.ts";
 import { closeStore, openStore, pruneOldData, recoverOrphanSessions } from "../src/main/store.ts";
 import { seedModels } from "../src/main/repos/models.ts";
+import { initSecrets } from "../src/main/secrets.ts";
 import { getConfig, setConfig } from "../src/main/repos/config.ts";
 import { detectPi } from "../src/main/env.ts";
 import {
@@ -178,6 +179,7 @@ app.whenReady().then(async () => {
   console.log(`[kivora] store ${info.dbPath} schema v${info.schemaVersion}`);
 
   await detectPi();
+  await initSecrets();
   const recovered = recoverOrphanSessions();
   if (recovered) console.warn(`[kivora] marked ${recovered} orphaned sessions as failed`);
   seedModels();

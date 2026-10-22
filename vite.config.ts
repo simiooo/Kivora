@@ -24,9 +24,9 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, "index.html"),
-        overlay: path.resolve(__dirname, "overlay.html"),
-        permission: path.resolve(__dirname, "permission.html"),
+        main: path.resolve(import.meta.dirname, "index.html"),
+        overlay: path.resolve(import.meta.dirname, "overlay.html"),
+        permission: path.resolve(import.meta.dirname, "permission.html"),
       },
     },
   },

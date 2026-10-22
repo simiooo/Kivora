@@ -9,7 +9,23 @@ import { db } from "./store.ts";
 
 const PLAIN_PREFIX = "plain:";
 
+let cachedAvailability: boolean | null = null;
+
+/** 启动时问一次（Electron 45 起推荐异步接口），之后同步读缓存 */
+export async function initSecrets(): Promise<void> {
+  try {
+    const api = safeStorage as unknown as { isAsyncEncryptionAvailable?: () => Promise<boolean> };
+    cachedAvailability = api.isAsyncEncryptionAvailable
+      ? await api.isAsyncEncryptionAvailable()
+      : safeStorage.isEncryptionAvailable();
+  } catch {
+    cachedAvailability = false;
+  }
+  console.log(`[kivora] secrets ${cachedAvailability ? "encrypted (DPAPI)" : "UNAVAILABLE"}`);
+}
+
 export function secretsAvailable(): boolean {
+  if (cachedAvailability !== null) return cachedAvailability;
   try {
     return safeStorage.isEncryptionAvailable();
   } catch {
