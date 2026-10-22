@@ -141,4 +141,44 @@
     background: var(--acorn-container);
     color: var(--foreground);
   }
+
+  /* 透明窗口（悬浮 / 权限浮窗）不能铺底色 */
+  html.overlay-window,
+  html.overlay-window body {
+    background: transparent !important;
+  }
+
+  /* 细滚动条：不抢眼睛 */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 8%);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(255 255 255 / 16%);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  select option {
+    background: var(--card);
+    color: var(--foreground);
+  }
+}
+
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1.15);
+  }
 }

@@ -1,6 +1,6 @@
-# Kivora 设计稿 v1
+﻿# Kivora 设计稿 v1
 
-十三块画板。源文件 `docs/assets/kivora-design-v1.fig`，改稿在 OpenPencil 里改，重新导出即可（**只导 PNG，按 id 小范围导**）。
+十四块画板。源文件 `docs/assets/kivora-design-v1.fig`，改稿在 OpenPencil 里改，重新导出即可（**只导 PNG，按 id 小范围导**）。
 
 | # | 画板 | 说明 |
 |---|---|---|
@@ -73,11 +73,27 @@
 
 ## 实现映射
 
-| 画板 | 前端位置 |
+全部画板已在 v0.1 落地，对应关系：
+
+| 画板 | 代码位置 |
 |---|---|
-| 01 / 02 / 10 / 11 | `src/renderer/App.tsx` 时间线，`components/message.tsx`、`task-strip.tsx`、`error-*` |
-| 03 / 08 / 12 / 13 | `pages/settings`、`components/model-repo.tsx`、`model-editor.tsx` |
-| 04 | `pages/onboarding` |
-| 05 | `pages/history` |
-| 06 / 09 | 独立 BrowserWindow（transparent + alwaysOnTop + click-through 区） |
-| 07 | `components/queue-panel.tsx` |
+| 01 / 02 / 10 / 11 | `src/renderer/pages/TimelinePage.tsx`、`components/timeline.tsx`（消息、折叠、审批卡、任务条、失败卡）、`components/composer.tsx`、`components/banner.tsx` |
+| 03 设置抽屉 | 由 `pages/SettingsPage.tsx` 的「通用」页取代（热键 / 演练模式 / 端点在模型页） |
+| 04 引导 | `pages/OnboardingPage.tsx` |
+| 05 历史 | `pages/HistoryPage.tsx` |
+| 06 悬浮 | `src/renderer/overlay/OverlayApp.tsx` + `overlay.html` |
+| 07 队列 | `components/queue-panel.tsx` |
+| 08 设置页 | `pages/SettingsPage.tsx`（通用 / 模型 / 语音 / 权限 / 关于） |
+| 09 权限浮窗 | `src/renderer/permission/PermissionApp.tsx` + `permission.html`，数据来自 `src/main/dispatcher/approval-bus.ts` |
+| 12 / 13 模型仓库 | `components/models-panel.tsx`、`components/model-editor.tsx` |
+| 14 阅读器 | `components/reader.tsx` |
+
+窗口：`src/main/windows.ts`（主窗 / 悬浮 / 权限，三个入口）。样式令牌：`src/renderer/styles.css`。
+
+## 落地时改过的地方
+
+- **03 设置抽屉**并入设置页的「通用」，不再单独做抽屉——同一件事两个入口容易分叉。
+- **05 历史**里去掉了「压缩」按钮：v0.1 没有接 Pi compaction，放一个点了没反应的按钮不如不放。
+- **审批卡**在已解决后不再显示三个按钮，改成一句状态（已允许 / 已拒绝 / 超时未处理），避免"看着能点其实不能"。
+- **悬浮卡的「前台」**改成「在跑」：v0.1 拿不到系统前台窗口，写一个假的进程名不如说真话。
+

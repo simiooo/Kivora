@@ -13,9 +13,12 @@
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs && vite build",
     "start": "node scripts/launch.mjs",
-    "smoke": "node scripts/build.mjs && node scripts/launch.mjs --smoke",
+    "smoke": "node scripts/build.mjs && vite build && node scripts/launch.mjs --smoke",
+    "shots": "node scripts/build.mjs && vite build && node scripts/launch.mjs --shots",
+    "flow": "node scripts/build.mjs && node scripts/launch.mjs --flow",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm test && pnpm flow"
   },
   "dependencies": {
     "clsx": "^2.1.1",

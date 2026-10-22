@@ -1,28 +1,21 @@
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
-import type { AppConfig, Role, TimelineMessage } from "../shared/ipc.ts";
+import { AppError } from "../shared/errors.ts";
 
-let db: DatabaseSync | null = null;
+/**
+ * 主进程独占 SQLite（7.1）。渲染进程永远拿不到连接，只通过 IPC 读投影后的数据。
+ * - WAL；迁移失败拒绝启动（抛错，由 main 退出）。
+ * - 所有写操作走 tx()，避免半截状态。
+ */
+
+let handle: DatabaseSync | null = null;
 let dbFile = "";
 let schemaVersion = 0;
-
-const DEFAULT_CONFIG: AppConfig = {
-  hotkey: "CommandOrControl+Alt+Space",
-  mockMode: true,
-  asrBaseUrl: "https://api.openai.com/v1",
-  asrModel: "whisper-1",
-  ttsBaseUrl: "https://api.openai.com/v1",
-  ttsModel: "tts-1",
-  ttsVoice: "alloy",
-  brainBaseUrl: "https://api.openai.com/v1",
-  brainModel: "gpt-4.1-mini",
-  taskBaseUrl: "https://api.openai.com/v1",
-  taskModel: "claude-sonnet-4-6",
-};
+let depth = 0;
 
 const MIGRATIONS: string[] = [
-  // v1
+  // v1 —— 最初的时间线骨架
   `
   CREATE TABLE IF NOT EXISTS sessions (
     id         TEXT PRIMARY KEY,
@@ -53,111 +46,254 @@ const MIGRATIONS: string[] = [
     updated_at INTEGER NOT NULL
   );
   `,
+
+  // v2 —— 会话状态投影、队列、审批总线、模型仓库
+  `
+  ALTER TABLE sessions ADD COLUMN cwd TEXT;
+  ALTER TABLE sessions ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE sessions ADD COLUMN runner TEXT NOT NULL DEFAULT 'mock';
+  ALTER TABLE sessions ADD COLUMN pi_session_file TEXT;
+  ALTER TABLE sessions ADD COLUMN tokens_in INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE sessions ADD COLUMN tokens_out INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE sessions ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0;
+  ALTER TABLE sessions ADD COLUMN summary TEXT;
+  ALTER TABLE sessions ADD COLUMN error TEXT;
+  ALTER TABLE sessions ADD COLUMN started_at INTEGER;
+  ALTER TABLE sessions ADD COLUMN ended_at INTEGER;
+
+  ALTER TABLE messages ADD COLUMN source TEXT NOT NULL DEFAULT 'text';
+  ALTER TABLE messages ADD COLUMN approval_id TEXT;
+  ALTER TABLE messages ADD COLUMN error TEXT;
+  ALTER TABLE messages ADD COLUMN confidence REAL;
+
+  ALTER TABLE events ADD COLUMN seq INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE events ADD COLUMN summary TEXT;
+  CREATE INDEX IF NOT EXISTS events_session_seq ON events (session_id, seq);
+
+  CREATE TABLE IF NOT EXISTS session_status (
+    session_id   TEXT PRIMARY KEY,
+    state        TEXT NOT NULL DEFAULT 'queued',
+    turn         INTEGER NOT NULL DEFAULT 0,
+    phase        TEXT NOT NULL DEFAULT 'idle',
+    tool         TEXT,
+    last_tool_ok INTEGER,
+    elapsed_ms   INTEGER NOT NULL DEFAULT 0,
+    needs        TEXT,
+    artifacts    TEXT NOT NULL DEFAULT '[]',
+    summary      TEXT,
+    updated_at   INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS queue (
+    id          TEXT PRIMARY KEY,
+    session_id  TEXT NOT NULL,
+    text        TEXT NOT NULL,
+    kind        TEXT NOT NULL DEFAULT 'queue',
+    position    INTEGER NOT NULL,
+    enqueued_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS queue_position ON queue (position);
+
+  CREATE TABLE IF NOT EXISTS approvals (
+    id          TEXT PRIMARY KEY,
+    source      TEXT NOT NULL,
+    session_id  TEXT,
+    tool        TEXT NOT NULL,
+    risk        TEXT NOT NULL,
+    summary     TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    detail      TEXT NOT NULL DEFAULT '[]',
+    options     TEXT NOT NULL DEFAULT '[]',
+    status      TEXT NOT NULL DEFAULT 'pending',
+    speech      TEXT NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL,
+    expires_at  INTEGER,
+    resolution  TEXT,
+    resolved_at INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS approvals_status ON approvals (status, created_at);
+
+  CREATE TABLE IF NOT EXISTS grants (
+    id         TEXT PRIMARY KEY,
+    session_id TEXT,
+    tool       TEXT NOT NULL,
+    scope      TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    expires_at INTEGER,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS models (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    provider        TEXT NOT NULL,
+    capability      TEXT NOT NULL,
+    base_url        TEXT NOT NULL,
+    model_id        TEXT NOT NULL,
+    params          TEXT NOT NULL DEFAULT '{}',
+    headers         TEXT NOT NULL DEFAULT '[]',
+    key_hint        TEXT,
+    test_status     TEXT NOT NULL DEFAULT 'untested',
+    test_latency_ms INTEGER,
+    tested_at       INTEGER,
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS bindings (
+    module   TEXT PRIMARY KEY,
+    model_id TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS secrets (
+    name       TEXT PRIMARY KEY,
+    ciphertext TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS audit (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts     INTEGER NOT NULL,
+    actor  TEXT NOT NULL,
+    action TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT '{}'
+  );
+
+  CREATE TABLE IF NOT EXISTS op_log (
+    op_id      TEXT PRIMARY KEY,
+    session_id TEXT,
+    tool       TEXT NOT NULL,
+    result     TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function openStore(dataDir: string): { dbPath: string; schemaVersion: number } {
   fs.mkdirSync(dataDir, { recursive: true });
   dbFile = path.join(dataDir, "kivora.db");
-  db = new DatabaseSync(dbFile);
-  db.exec("PRAGMA journal_mode = WAL;");
-  db.exec("PRAGMA foreign_keys = ON;");
-  db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL);");
+  handle = new DatabaseSync(dbFile);
+  handle.exec("PRAGMA journal_mode = WAL;");
+  handle.exec("PRAGMA foreign_keys = ON;");
+  handle.exec("PRAGMA busy_timeout = 5000;");
+  handle.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL);");
 
   const applied = new Set(
-    (db.prepare("SELECT version FROM schema_migrations").all() as Array<{ version: number }>).map((r) => r.version),
+    (handle.prepare("SELECT version FROM schema_migrations").all() as Array<{ version: number }>).map((r) => r.version),
   );
 
   for (let i = 0; i < MIGRATIONS.length; i++) {
     const version = i + 1;
     if (applied.has(version)) continue;
-    db.exec("BEGIN");
     try {
-      db.exec(MIGRATIONS[i]);
-      db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(version, Date.now());
-      db.exec("COMMIT");
+      handle.exec("BEGIN");
+      handle.exec(MIGRATIONS[i]);
+      handle.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(version, Date.now());
+      handle.exec("COMMIT");
+      console.log(`[kivora] migrated to v${version}`);
     } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
+      handle.exec("ROLLBACK");
+      throw new AppError("storage_failed", {
+        message: `数据库迁移到 v${version} 失败，已阻止启动以免数据损坏。`,
+        detail: err instanceof Error ? err.message : String(err),
+        retryable: false,
+      });
     }
   }
 
   schemaVersion = MIGRATIONS.length;
-  seed();
   return { dbPath: dbFile, schemaVersion };
 }
 
-function seed(): void {
-  const now = Date.now();
-  const has = get().prepare("SELECT COUNT(*) AS n FROM sessions").get() as { n: number };
-  if (has.n === 0) {
-    get()
-      .prepare("INSERT INTO sessions (id, title, prompt, state, created_at, updated_at) VALUES (?,?,?,?,?,?)")
-      .run("s_welcome", "欢迎", "", "idle", now, now);
-    get()
-      .prepare("INSERT INTO messages (session_id, role, content, ts) VALUES (?,?,?,?)")
-      .run(
-        "s_welcome",
-        "assistant",
-        "我是 Kivora。按住 Ctrl+Alt+Space 说话，我会开一个独立会话去把事做完。现在跑的是 mock 端点。",
-        now,
-      );
-  }
+export function db(): DatabaseSync {
+  if (!handle) throw new AppError("storage_failed", { message: "数据库还没打开。" });
+  return handle;
 }
 
-function get(): DatabaseSync {
-  if (!db) throw new Error("store not open");
-  return db;
+/** 支持嵌套的写事务（内部用 savepoint） */
+export function tx<T>(fn: () => T): T {
+  const conn = db();
+  const savepoint = depth > 0 ? `sp_${depth}` : null;
+  if (savepoint) conn.exec(`SAVEPOINT ${savepoint}`);
+  else conn.exec("BEGIN");
+  depth++;
+  try {
+    const result = fn();
+    depth--;
+    if (savepoint) conn.exec(`RELEASE ${savepoint}`);
+    else conn.exec("COMMIT");
+    return result;
+  } catch (err) {
+    depth--;
+    if (savepoint) conn.exec(`ROLLBACK TO ${savepoint}; RELEASE ${savepoint}`);
+    else conn.exec("ROLLBACK");
+    throw err;
+  }
 }
 
 export function storeInfo(): { dbPath: string; schemaVersion: number } {
   return { dbPath: dbFile, schemaVersion };
 }
 
-export function listTimeline(limit = 50): TimelineMessage[] {
-  const rows = get()
-    .prepare("SELECT id, session_id AS sessionId, role, content, ts FROM messages ORDER BY ts DESC, id DESC LIMIT ?")
-    .all(limit) as unknown as TimelineMessage[];
-  return rows.reverse();
-}
-
-export function appendMessage(role: Role, content: string, sessionId: string | null = null): TimelineMessage {
-  const ts = Date.now();
-  const res = get()
-    .prepare("INSERT INTO messages (session_id, role, content, ts) VALUES (?,?,?,?)")
-    .run(sessionId, role, content, ts);
-  const id = Number(res.lastInsertRowid);
-  if (sessionId) {
-    get().prepare("UPDATE sessions SET updated_at = ? WHERE id = ?").run(ts, sessionId);
+export function audit(actor: string, action: string, detail: Record<string, unknown> = {}): void {
+  try {
+    db()
+      .prepare("INSERT INTO audit (ts, actor, action, detail) VALUES (?,?,?,?)")
+      .run(Date.now(), actor, action, JSON.stringify(detail));
+  } catch {
+    // 审计不是关键路径，失败不阻断主流程
   }
-  return { id, sessionId, role, content, ts };
 }
 
-export function getConfig(): AppConfig {
-  const rows = get().prepare("SELECT key, value FROM config").all() as Array<{ key: string; value: string }>;
-  const stored: Record<string, unknown> = {};
-  for (const row of rows) {
-    try {
-      stored[row.key] = JSON.parse(row.value);
-    } catch {
-      // ignore corrupt rows, fall back to defaults
-    }
-  }
-  return { ...DEFAULT_CONFIG, ...stored } as AppConfig;
-}
-
-export function setConfig(patch: Partial<AppConfig>): AppConfig {
+/** 启动时把孤儿 running 标 failed(orphaned)（7.1） */
+export function recoverOrphanSessions(): number {
   const now = Date.now();
-  const stmt = get().prepare(
-    "INSERT INTO config (key, value, updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-  );
-  for (const [key, value] of Object.entries(patch)) {
-    if (!(key in DEFAULT_CONFIG)) continue;
-    stmt.run(key, JSON.stringify(value), now);
+  const rows = db()
+    .prepare("SELECT id FROM sessions WHERE state IN ('starting','running','waiting_user')")
+    .all() as Array<{ id: string }>;
+  if (rows.length === 0) return 0;
+  tx(() => {
+    for (const row of rows) {
+      db()
+        .prepare("UPDATE sessions SET state = 'failed', ended_at = ?, updated_at = ?, error = ? WHERE id = ?")
+        .run(
+          now,
+          now,
+          JSON.stringify({
+            code: "internal",
+            message: "上次退出时这个任务还在跑，已经停了，可以重试。",
+            detail: null,
+            retryable: true,
+            at: now,
+          }),
+          row.id,
+        );
+      db()
+        .prepare(
+          "UPDATE session_status SET state = 'failed', phase = 'idle', updated_at = ? WHERE session_id = ?",
+        )
+        .run(now, row.id);
+    }
+    db().prepare("DELETE FROM queue").run();
+  });
+  return rows.length;
+}
+
+/** 保留策略：事件与审计只留 N 天 */
+export function pruneOldData(retentionDays: number): void {
+  if (retentionDays <= 0) return;
+  const cutoff = Date.now() - retentionDays * 86_400_000;
+  try {
+    db().prepare("DELETE FROM events WHERE ts < ?").run(cutoff);
+    db().prepare("DELETE FROM audit WHERE ts < ?").run(cutoff);
+    db().prepare("DELETE FROM approvals WHERE created_at < ? AND status <> 'pending'").run(cutoff);
+    db().prepare("DELETE FROM op_log WHERE created_at < ?").run(cutoff);
+  } catch (err) {
+    console.warn("[kivora] prune failed", err);
   }
-  return getConfig();
 }
 
 export function closeStore(): void {
-  db?.close();
-  db = null;
+  handle?.close();
+  handle = null;
 }

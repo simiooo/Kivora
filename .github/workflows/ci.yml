@@ -32,13 +32,23 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Smoke (launch, screenshot, quit)
-        run: pnpm smoke
+      - name: Flow (headless dispatcher acceptance)
+        run: node scripts/launch.mjs --flow
         timeout-minutes: 5
 
-      - name: Upload smoke screenshot
+      - name: Smoke (launch, screenshot, quit)
+        run: node scripts/launch.mjs --smoke
+        timeout-minutes: 5
+
+      - name: Shots (all screens)
+        run: node scripts/launch.mjs --shots
+        timeout-minutes: 5
+
+      - name: Upload screenshots
         uses: actions/upload-artifact@v4
         with:
-          name: smoke
-          path: artifacts/smoke.png
+          name: screenshots
+          path: |
+            artifacts/smoke.png
+            artifacts/shot-*.png
           if-no-files-found: ignore

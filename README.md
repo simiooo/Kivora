@@ -2,70 +2,118 @@
 
 <img src="docs/assets/icon/kivora-256.png" width="88" alt="Kivora" />
 
-**Voice-first desktop agent for Windows, built on [Pi](https://github.com/earendil-works/pi).**
+**Windows 上的常驻语音助手。按住热键说一句，它开一个独立会话把事做完，再用一句话告诉你结果。**
 
-按住热键说一句话，Kivora 开一个独立会话，用 CUA 在你的电脑上把事做完，再用一句话告诉你结果。
+语音层只做调度：判断你的意思、把活派出去、把结果说回来。真正的操作在会话里跑，每一步都进事件流。
 
-> 状态：**D0（脚手架）**。当前只有窗口、SQLite、热键、消息时间线和 mock 调度器；ASR/TTS/CUA 在 D1–D7 接入。
+> 状态：**v0.1**。UI 全部按 [设计稿 v1](docs/design-v1.md) 落地；模型仓库、录音转写、审批总线、队列、历史都能用；
+> 文件整理是真的会动文件（要你确认）；浏览器 / 桌面控制（CUA）还没接，这类指令会如实失败而不是假装成功。
 
-![Kivora D0](docs/assets/d0.png)
+![主时间线](docs/assets/design-01-timeline.png)
 
 ---
 
-## 现在能跑什么
+## 现在能做什么
+
+| 能力 | 状态 | 说明 |
+|---|---|---|
+| 按住热键说话 | ✅ | 录音 → ASR → 转写 → 进时间线；输错可以改文字重发 |
+| 打字输入 | ✅ | 和语音同一条路，只是 `source` 不同 |
+| 任务会话 | ✅ | 每件事一个会话，独立的事件流与状态投影 |
+| 文件整理（真实） | ✅ | "把下载目录里上周的 pdf 挪到文档/发票"：扫描 → 审批 → 真搬。不覆盖、不删除 |
+| 审批总线 | ✅ | 语音说「可以 / 以后都行 / 不行」，或点卡片、点浮窗；G1 30s / G2 60s 超时默认拒绝，G3 不开语音 |
+| 排队 / 插话 / 提前 | ✅ | 队列上限 5，同一会话最多 2 条；说「先做这个」会插队 |
+| 状态查询 | ✅ | "刚才那个做完了吗" → 说清第几轮、在干什么、多久 |
+| 停止 / 重试 / 再试一次 | ✅ | "停"、"重试"；失败的会话可以保留上下文重试或重开 |
+| 模型仓库 | ✅ | 增删改查、能力绑定、测试连接（真打端点）、自定义请求头、参数 |
+| Key 存储 | ✅ | Windows 凭据管理器（DPAPI），只存遮码，不进配置和日志 |
+| 语音合成 | ✅ | 端点直连；同一句缓存；播报抢占淡出 |
+| 桌面悬浮 | ✅ | 透明浮窗：待处理 / 在跑 / 上次；点「说一句」回到主窗 |
+| 权限浮窗 | ✅ | 右下角、不抢焦点、倒计时、三个按钮语义固定 |
+| 会话历史 | ✅ | 搜索、事件流、对话、导出 Markdown、删除 |
+| 引导 | ✅ | 三步：连模型 / 麦克风与热键 / 完成 |
+| 浏览器控制（CUA） | ⛔ | 未接。说"帮我搜一下"会得到一条明确的失败和"现在能做什么" |
+| Pi 会话执行 | ⛔ | 未接。任务跑在内置执行器里，不是 `pi --mode rpc` |
+
+## 跑起来
 
 ```bash
 pnpm install
-pnpm dev        # 开发：Vite + Electron，热重载
-pnpm build      # 产物：dist/（renderer）+ dist-electron/（main, preload）
+
+pnpm dev        # Vite + Electron，热重载
+pnpm build      # dist/（三个窗口）+ dist-electron/（main、preload）
 pnpm start      # 跑构建产物
-pnpm smoke      # 启动、截图到 artifacts/smoke.png、退出
+
 pnpm typecheck  # tsc
+pnpm test       # vitest：59 个用例（路由 / 文本规则 / 仓储 / 文件边界）
+pnpm flow       # 不开窗，直接把调度器跑一遍（28 条断言，含真实搬文件）
+pnpm smoke      # 启动 → 截图 → 退出（CI 闸门）
+pnpm shots      # 七个界面全截图到 artifacts/
 ```
 
-启动后：
-
-- `Ctrl+Alt+Space` 唤起（窗口内会亮"在听"）。
-- 底部输入框回车，或点麦克风按钮（走 mock 转写），会把消息写进 SQLite 并拿到一句 mock 回复。
-- 右上角齿轮打开设置：改热键、切 mock 模式。四段端点（ASR / TTS / brain / task）在配置里，D1 起接真实请求。
+首次启动会进引导。想先看东西，引导里点「跳过这一步」即可（默认演练模式，不会动真文件）。
 
 ## 架构
 
 ```
-Renderer (React 19 + Tailwind v4)
-  └─ IPC（contextBridge，无 Node 权限）
-Main (Electron 45 / Node 24)
-  ├─ SQLite（node:sqlite，WAL）——唯一持久化入口
-  ├─ store / config / (D3) VoiceAgent / (D4) SessionMgr
-  └─ spawn: pi --mode rpc（D3 起）
+┌─ Renderer（React 19 + Tailwind v4）──────────────────────────────┐
+│  index.html      时间线 / 历史 / 设置 / 引导                      │
+│  overlay.html    桌面悬浮（透明、不抢焦点）                       │
+│  permission.html 权限浮窗（透明、置顶）                           │
+│  只能通过 window.kivora（contextBridge）说话，没有 Node 权限      │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ IPC（invoke + 一条 changed 广播）
+┌──────────────────────────▼──────────────────────────────────────┐
+│ Main（Electron 45 / Node 24）                                    │
+│  store.ts          node:sqlite + WAL + 迁移（失败拒绝启动）       │
+│  repos/*           会话 / 事件 / 队列 / 审批 / 模型 / 配置        │
+│  providers/http.ts 超时、指数退避、熔断、错误归一化               │
+│  providers/*       OpenAI 兼容的 chat / ASR / TTS（含 Anthropic） │
+│  voice.ts          转写与合成（mock 可切、合成缓存）              │
+│  dispatcher/       反射路由 → brain → 会话/队列/审批              │
+│  tasks/files.ts    真正能执行的那条路 + 硬边界                    │
+│  windows.ts        三个窗口                                       │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-- 渲染进程**不经手**任何持久化与密钥；只拿 IPC DTO。
-- 存储用 Node 内置 `node:sqlite`，**没有原生模块**，不需要 electron-rebuild。
-- 设计令牌复用栗记（Nuto）的「极简」语言，见 [docs/DESIGN-NOTES.md](docs/DESIGN-NOTES.md)。
+几条硬规则：
+
+- 渲染进程**不经手**持久化和密钥，只拿 DTO。
+- 存储用 Node 内置 `node:sqlite`，**没有原生模块**，不用 electron-rebuild。
+- 所有出网请求过同一层：20s 超时、按链路退避（brain 3×/asr 3×/tts 2×）、60s 内 5 次失败熔断 30s。
+- **重试只发生在单次 provider 请求这一层**，不重放整个 agent turn。
+- 任务结束、审批结果、配置变更都写库并广播，UI 只重取对应切片。
+
+## 数据放在哪
+
+```
+%APPDATA%\kivora\data\kivora.db   # 会话、消息、事件、队列、审批、模型、配置
+Windows 凭据管理器（DPAPI）        # API Key，只存密文
+```
+
+事件与审计按设置里的天数清理（默认 7 天），消息不自动删。
+
+## 已知边界（说清楚，不假装）
+
+1. **CUA 没接**：浏览器与桌面控制在 D5 之后，目前只有文件整理是真的。
+2. **Pi 执行器没接**：任务跑在内置执行器里；`pi` 检测到了只用于展示（关于页）。
+3. **打包没做**：还没有安装包，`pnpm start` 跑构建产物。
+4. **真端点没连过**：没有 Key，所以 ASR/TTS/chat 的真实链路只做了代码与错误路径，未做端到端压测。
+5. **G3 一律手动**：装软件、UAC、支付、凭据只出卡片，不开语音（设置里可以强开，不建议）。
 
 ## 设计稿
 
-八块画板（时间线、运行中、设置抽屉、onboarding、会话历史、桌面悬浮、未处理队列、设置页）。索引与实现映射见 [docs/design-v1.md](docs/design-v1.md)，源文件 `docs/assets/kivora-design-v1.fig`。
-
-![主时间线](docs/assets/design-01-timeline.png)
+十四块画板在 [docs/design-v1.md](docs/design-v1.md)，源文件 `docs/assets/kivora-design-v1.fig`。长文折叠、错误状态、权限浮窗的规则也写在那份文档里。
 
 ## 路线
 
-| 天 | 内容 |
+| 阶段 | 内容 |
 |---|---|
-| D0 ✅ | 仓库骨架、SQLite、热键、时间线、mock 调度 |
-| D1 | 录音 + ASR（mock/真实可切）+ transcript 落库 |
-| D2 | 设置页完整化、依赖检查 |
-| D3 | VoiceAgent（pi-agent-core，14 工具） |
-| D4 | SessionMgr + 状态投影 + 队列 |
-| D5 | cua-driver 闸门（5 项过 4 项） |
-| D6 | Playwright + 浏览器场景 |
-| D7 | 审批总线 |
-| D8 | 打包 + 首次运行引导 |
-| D9 | 三场景 10 连跑 |
-| D10 | demo + v0.1.0 |
+| v0.1 ✅ | UI 全量、模型仓库、录音转写、审批总线、队列、历史、真实文件整理 |
+| v0.2 | `pi --mode rpc` 执行器 + 工具白名单；CUA（cua-driver bounded） |
+| v0.3 | Playwright 场景、作用域授权的完整生命周期、成本面板 |
+| v1.0 | 安装包、自动更新、三场景 10 连跑验收 |
 
 ## 许可
 
-MIT。alpha 阶段，无沙箱，别在有重要文件的机器上长期跑。
+MIT。早期版本没有沙箱，别在有重要文件的机器上无人值守地跑。
