@@ -5,6 +5,7 @@ export const CONFIG_DEFAULTS: AppConfig = {
   hotkey: "CommandOrControl+Alt+Space",
   mockMode: true,
   onboardingDone: false,
+  taskRuntime: "builtin",
   narration: true,
   ackEnabled: true,
   asrLanguage: "zh",

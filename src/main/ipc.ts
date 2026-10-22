@@ -1,4 +1,4 @@
-import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+﻿import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { IPC, type ModelPreset } from "../shared/ipc.ts";
 import type { AppConfig, ApprovalResolution, ModuleKey, OverlayState } from "../shared/domain.ts";
@@ -12,6 +12,7 @@ import {
   resumeTaskById,
 } from "./dispatcher/index.ts";
 import { cancelRun } from "./dispatcher/runner.ts";
+import { cancelPiRun } from "./dispatcher/pi-runner.ts";
 import {
   deleteSession,
   getSession,
@@ -85,6 +86,7 @@ const configPatchSchema = z.object({
   hotkey: z.string().trim().min(1).max(80).optional(),
   mockMode: z.boolean().optional(),
   onboardingDone: z.boolean().optional(),
+  taskRuntime: z.enum(["builtin", "pi"]).optional(),
   narration: z.boolean().optional(),
   ackEnabled: z.boolean().optional(),
   asrLanguage: z.enum(["zh", "en", "auto"]).optional(),
@@ -210,6 +212,7 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.sessionDelete, (_event, raw) => {
     const id = parse(sessionId, raw);
     cancelRun(id);
+    cancelPiRun(id);
     deleteSession(id);
     broadcast("sessions");
     broadcast("timeline");
@@ -239,6 +242,7 @@ export function registerIpc(deps: IpcDeps): void {
       const session = getSession(row.sessionId);
       if (session && (session.state === "queued" || session.state === "paused")) {
         cancelRun(session.id);
+        cancelPiRun(session.id);
         setSessionState(session.id, "aborted", { summary: "取消了排队" });
         appendEvent(session.id, "aborted", "取消了排队");
       }

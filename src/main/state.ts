@@ -2,7 +2,7 @@ import { app } from "electron";
 import type { AppState } from "../shared/domain.ts";
 import { storeInfo } from "./store.ts";
 import { getConfig } from "./repos/config.ts";
-import { getPiVersion } from "./env.ts";
+import { getPiVersion, piAvailable } from "./env.ts";
 import { secretsAvailable } from "./secrets.ts";
 
 export function appState(): AppState {
@@ -18,7 +18,7 @@ export function appState(): AppState {
     hotkeyOk: Boolean(config.hotkey),
     mock: config.mockMode,
     secretsAvailable: secretsAvailable(),
-    piAvailable: getPiVersion() !== null,
+    piAvailable: piAvailable(),
     piVersion: getPiVersion(),
     dataDir: app.getPath("userData"),
   };

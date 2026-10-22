@@ -30,7 +30,8 @@ export function getPiVersion(): string | null {
 }
 
 export function piAvailable(): boolean {
-  return piVersion !== null;
+  // KIVORA_PI_BIN 是给测试/自定义安装路径留的口子
+  return Boolean(process.env.KIVORA_PI_BIN) || piVersion !== null;
 }
 
 export function nodeVersion(): string {

@@ -1,6 +1,6 @@
-import type { SessionState } from "../shared/domain.ts";
+﻿import type { SessionState } from "../shared/domain.ts";
 import { handleUtterance, cancelTaskById } from "./dispatcher/index.ts";
-import { getSession, listTimeline } from "./repos/sessions.ts";
+import { getSession, listEvents as listSessionEvents, listTimeline } from "./repos/sessions.ts";
 import { pendingApprovals, getApproval } from "./repos/approvals.ts";
 import { awaitApproval, expireApprovals, openApproval } from "./dispatcher/approval-bus.ts";
 import { listQueue as queueList, clearQueue } from "./repos/queue.ts";
@@ -220,7 +220,49 @@ export async function runFlow(): Promise<number> {
   );
   check("接不了的指令如实失败", unsupportedFailed, noMatchId ? (getSession(noMatchId)?.error?.message ?? "") : "");
 
-  setConfig({ mockMode: true, narration: previousNarration });
+  // 12. Pi 执行器：用假 pi 跑一遍协议解析（真实 pi 需要凭据，CI 里没有）
+  const piDir = fs.mkdtempSync(path.join(os.tmpdir(), "kivora-pi-"));
+  const fakeJs = path.join(piDir, "fake-pi.js");
+  const fakeCmd = path.join(piDir, "fake-pi.cmd");
+  fs.writeFileSync(
+    fakeJs,
+    [
+      "const lines = [",
+      '  { type: "session", version: 3, id: "fake", timestamp: new Date().toISOString(), cwd: process.cwd() },',
+      '  { type: "turn_start" },',
+      '  { type: "tool_execution_start", toolName: "list", args: { path: "~/Downloads" } },',
+      '  { type: "tool_execution_end", toolName: "list", isError: false },',
+      '  { type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "看过了，3 个文件。" }] } },',
+      '  { type: "agent_end", messages: [{ role: "assistant", content: "看过了，3 个文件。" }] },',
+      "];",
+      "for (const line of lines) console.log(JSON.stringify(line));",
+      "process.exit(0);",
+    ].join("\n"),
+    "utf8",
+  );
+  fs.writeFileSync(fakeCmd, `@echo off\r\nnode "${fakeJs}" %*\r\n`, "utf8");
+
+  const previousPi = process.env.KIVORA_PI_BIN;
+  process.env.KIVORA_PI_BIN = fakeCmd;
+  setConfig({ mockMode: false, taskRuntime: "pi", narration: false });
+
+  const piTurn = await handleUtterance("帮我看一下下载目录", { source: "voice" });
+  const piId = piTurn.action.kind === "task_created" ? piTurn.action.sessionId : null;
+  const piDone = await waitFor("等 Pi 会话结束", () => piId !== null && stateOf(piId) === "done", 10_000);
+  check("Pi 会话跑通", piDone, piId ? (stateOf(piId) ?? "?") : "—");
+  check(
+    "Pi 的结论进了会话摘要",
+    piId !== null && (getSession(piId)?.status.summary ?? "").includes("看过了"),
+    piId ? (getSession(piId)?.status.summary ?? "") : "",
+  );
+  const piEvents = piId ? listSessionEvents(piId) : [];
+  check("Pi 的工具事件被投影", piEvents.some((event) => event.type === "tool_start"), `${piEvents.length} 条事件`);
+
+  if (previousPi === undefined) delete process.env.KIVORA_PI_BIN;
+  else process.env.KIVORA_PI_BIN = previousPi;
+  fs.rmSync(piDir, { recursive: true, force: true });
+
+  setConfig({ mockMode: true, taskRuntime: "builtin", narration: previousNarration });
   if (previousHome === undefined) delete process.env.KIVORA_HOME;
   else process.env.KIVORA_HOME = previousHome;
   fs.rmSync(fakeHome, { recursive: true, force: true });

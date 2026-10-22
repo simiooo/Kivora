@@ -98,6 +98,36 @@ function Card({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="mb-4 rounded-[16px] bg-card px-5 py-2">{children}</div>;
 }
 
+function Segmented({
+  active,
+  disabled,
+  onClick,
+  label,
+  detail,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  label: string;
+  detail: string;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex min-w-[140px] flex-col items-start rounded-[12px] px-3.5 py-2 text-left transition-colors",
+        active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground",
+        disabled && "opacity-40",
+      )}
+    >
+      <span className="text-[13px] font-medium">{label}</span>
+      <span className={cn("mt-0.5 text-[11px]", active ? "text-primary-foreground/70" : "text-faint")}>{detail}</span>
+    </button>
+  );
+}
+
 /* ------------------------------------------------------------- 通用 */
 
 function GeneralSection({
@@ -158,6 +188,35 @@ function GeneralSection({
           className="font-mono text-[13px]"
           spellCheck={false}
         />
+      </Field>
+
+      <Field
+        label="任务执行器"
+        hint={
+          bootstrap.config.taskRuntime === "pi"
+            ? "Pi 会话有自己的文件与命令工具，审批总线管不到它。只在自己信任的机器上开。"
+            : "内置执行器只做文件整理，所有动作都走审批。"
+        }
+      >
+        <div className="flex gap-2">
+          <Segmented
+            active={bootstrap.config.taskRuntime === "builtin"}
+            onClick={() => void patch({ taskRuntime: "builtin" })}
+            label="内置"
+            detail="文件整理，走审批"
+          />
+          <Segmented
+            active={bootstrap.config.taskRuntime === "pi"}
+            disabled={!bootstrap.state.piAvailable}
+            onClick={() => void patch({ taskRuntime: "pi" })}
+            label="Pi 会话"
+            detail={
+              bootstrap.state.piAvailable
+                ? `pi ${bootstrap.state.piVersion ?? ""} · 未接入审批`
+                : "没检测到 pi"
+            }
+          />
+        </div>
       </Field>
 
       <Card>
@@ -483,6 +542,14 @@ function AboutSection({ bootstrap }: { bootstrap: Bootstrap }): React.JSX.Elemen
     ["Electron", bootstrap.state.electron],
     ["Node", bootstrap.state.node],
     ["Pi 内核", bootstrap.state.piAvailable ? `已安装 ${bootstrap.state.piVersion ?? ""}` : "未检测到（任务用内置执行器）"],
+    [
+      "任务执行器",
+      bootstrap.config.mockMode
+        ? "演练模式（不发真实请求）"
+        : bootstrap.config.taskRuntime === "pi"
+          ? "Pi 会话"
+          : "内置（文件整理）",
+    ],
     ["凭据", bootstrap.state.secretsAvailable ? "Windows 凭据管理器（DPAPI）" : "不可用，Key 以明文存本地"],
     ["数据库", displayPath(bootstrap.state.dbPath, 56)],
     ["数据目录", displayPath(bootstrap.state.dataDir, 56)],

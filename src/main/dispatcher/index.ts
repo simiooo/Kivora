@@ -17,6 +17,8 @@ import { enqueue, promoteQueued, takeNextQueued, listQueue } from "../repos/queu
 import { currentApproval, answerById, cancelApprovalsForSession } from "./approval-bus.ts";
 import { route, renderStatus, type RouterContext } from "./router.ts";
 import { cancelRun, isRunning, pickScenario, startTask } from "./runner.ts";
+import { cancelPiRun, isPiRunning } from "./pi-runner.ts";
+import { piAvailable } from "../env.ts";
 import { broadcast, speak } from "../bus.ts";
 import { getConfig } from "../repos/config.ts";
 import { getBoundModel } from "../repos/models.ts";
@@ -78,6 +80,15 @@ function say(turn: ReturnType<typeof collect>, content: string, opts: { speak?: 
   return message;
 }
 
+function cancelAnyRun(id: string): void {
+  cancelRun(id);
+  cancelPiRun(id);
+}
+
+function taskIsRunning(id: string): boolean {
+  return isRunning(id) || isPiRunning(id);
+}
+
 function launch(sessionId: string): void {
   const session = getSession(sessionId);
   if (!session) return;
@@ -85,7 +96,9 @@ function launch(sessionId: string): void {
   setSessionError(sessionId, null);
   appendEvent(sessionId, "queued", `开始执行：${session.title}`);
   broadcast("sessions");
-  startTask(session, { onFinish: () => pump() }, getConfig().mockMode ? "mock" : "real");
+  const config = getConfig();
+  const mode = config.mockMode ? "mock" : config.taskRuntime === "pi" && piAvailable() ? "pi" : "real";
+  startTask(session, { onFinish: () => pump() }, mode);
 }
 
 /** 有排队且没有在跑的，就启动下一条 */
@@ -185,9 +198,9 @@ export async function handleUtterance(
         say(turn, "这个任务已经不在了。");
         return { messages: turn.messages, action: { kind: "none" }, spoken: null };
       }
-      cancelRun(session.id);
+      cancelAnyRun(session.id);
       cancelApprovalsForSession(session.id);
-      if (!isRunning(session.id)) {
+      if (!taskIsRunning(session.id)) {
         setSessionState(session.id, "aborted", { summary: "按你说的停了。" });
         appendEvent(session.id, "aborted", "按你说的停了。");
         say(turn, "好，停了。");
@@ -209,7 +222,7 @@ export async function handleUtterance(
         say(turn, `重开了一个：${fresh.title}。`);
         return { messages: turn.messages, action: { kind: "retried", sessionId: fresh.id, mode: "restart" }, spoken: null };
       }
-      if (isRunning(session.id)) {
+      if (taskIsRunning(session.id)) {
         say(turn, "它还在跑，先等它结束。");
         return { messages: turn.messages, action: { kind: "none" }, spoken: null };
       }
@@ -368,7 +381,7 @@ export function cancelTaskById(id: string): void {
   if (!isActive(session.state) && session.state !== "paused") {
     throw new AppError("conflict", { message: "它已经结束了，不用取消。" });
   }
-  cancelRun(id);
+  cancelAnyRun(id);
   cancelApprovalsForSession(id);
   setSessionState(id, "aborted", { summary: "手动停止" });
   appendEvent(id, "aborted", "手动停止");
@@ -381,7 +394,7 @@ export function cancelTaskById(id: string): void {
 export function retryTaskById(id: string, mode: "continue" | "restart"): void {
   const session = getSession(id);
   if (!session) throw new AppError("not_found", { message: "这个任务已经不在了。" });
-  if (isRunning(id)) throw new AppError("conflict", { message: "它还在跑。" });
+  if (taskIsRunning(id)) throw new AppError("conflict", { message: "它还在跑。" });
   if (mode === "restart") {
     const fresh = createSession({ title: session.title, prompt: session.prompt, runner: "mock" });
     lastReferenced = fresh.id;

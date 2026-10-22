@@ -298,10 +298,14 @@ export interface ModelDraft {
 
 export type AsrLanguage = "zh" | "en" | "auto";
 
+/** 任务执行器：内置（文件整理）/ Pi 会话（pi -p --mode json） */
+export type TaskRuntime = "builtin" | "pi";
+
 export interface AppConfig {
   hotkey: string;
   mockMode: boolean;
   onboardingDone: boolean;
+  taskRuntime: TaskRuntime;
   /** 旁白：模型文本先出口（3.9） */
   narration: boolean;
   /** 缓存 ack 片段 */

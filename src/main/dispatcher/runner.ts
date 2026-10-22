@@ -5,6 +5,7 @@ import { awaitApproval, openApproval } from "./approval-bus.ts";
 import { getConfig } from "../repos/config.ts";
 import { serializeError } from "../../shared/errors.ts";
 import { describeTarget, parseFileTask, scanFiles, transferFiles } from "../tasks/files.ts";
+import { startPiRun } from "./pi-runner.ts";
 
 /**
  * 任务执行器（v1）。
@@ -204,10 +205,14 @@ export function startRun(session: Session, hooks: RunnerHooks): void {
   });
 }
 
-export type RunMode = "mock" | "real";
+export type RunMode = "mock" | "real" | "pi";
 
-/** 演练模式走脚本；关掉演练就走真正能干的那条路（文件整理） */
+/** 演练模式走脚本；关掉演练按设置选内置执行器或 Pi 会话 */
 export function startTask(session: Session, hooks: RunnerHooks, mode: RunMode): void {
+  if (mode === "pi") {
+    startPiRun(session, hooks);
+    return;
+  }
   if (mode === "real") startRealRun(session, hooks);
   else startRun(session, hooks);
 }
