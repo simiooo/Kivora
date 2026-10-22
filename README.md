@@ -6,6 +6,8 @@
 
 > 状态：**D0（脚手架）**。当前只有窗口、SQLite、热键、消息时间线和 mock 调度器；ASR/TTS/CUA 在 D1–D7 接入。
 
+![Kivora D0](docs/assets/d0.png)
+
 ---
 
 ## 现在能跑什么
