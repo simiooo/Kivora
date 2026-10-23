@@ -196,6 +196,17 @@ async function runShots(): Promise<void> {
     await capture(win, file);
   }
 
+  // 引导页第 3 步（完成态）：连点两次「下一步」
+  await loadRoute(win, "/onboarding");
+  await wait(600);
+  for (let i = 0; i < 2; i += 1) {
+    await win.webContents.executeJavaScript(
+      `(() => { const b = [...document.querySelectorAll("button")].find((x) => x.textContent && x.textContent.trim() === "下一步"); if (b) { b.click(); return true; } return false; })()`,
+    );
+    await wait(420);
+  }
+  await capture(win, "shot-12-onboarding-done.png");
+
   // 拖拽区是否真的落到了 CSS 上（Electron 只认 -webkit-app-region）
   const dragRegion = await win.webContents.executeJavaScript(
     `(() => { const el = document.querySelector("[data-drag='1']"); if (!el) return null; const s = getComputedStyle(el); return s.getPropertyValue("-webkit-app-region") || s.webkitAppRegion || null; })()`,
