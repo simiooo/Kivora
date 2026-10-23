@@ -109,6 +109,7 @@ const api: KivoraBridge = {
 
   completeSetup: () => invoke(IPC.setupComplete),
 
+  costStats: () => invoke(IPC.costStats),
   getOverlayState: () => invoke(IPC.overlayState),
   overlayAsk: () => invoke(IPC.overlayAsk),
   overlayOpenMain: () => invoke(IPC.overlayOpenMain),

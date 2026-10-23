@@ -41,6 +41,7 @@ import { listServers, mcpCapability, MCP_PRESETS, removeServer, saveServer } fro
 import { assertProbeable, probeMcpServer } from "./mcp-client.ts";
 import { probeModel } from "./providers/probe.ts";
 import { AsrStream, isStreamingAsrModel } from "./providers/dashscope-stream.ts";
+import { channelStats, chooseAsrChannel } from "./cost-router.ts";
 import { mockMode } from "./env.ts";
 import { getBoundModel } from "./repos/models.ts";
 import { newId } from "../shared/domain.ts";
@@ -217,9 +218,14 @@ export function registerIpc(deps: IpcDeps): void {
 
   handle(IPC.asrStreamStart, async () => {
     const model = getBoundModel("asr");
-    if (!model || model.provider !== "dashscope" || !isStreamingAsrModel(model.modelId)) {
-      return { streaming: false as const };
-    }
+    const streamingReady = Boolean(model && model.provider === "dashscope" && isStreamingAsrModel(model.modelId));
+    const config = getConfig();
+    // 成本路由：流式只留给持续对话，单次指令用批次
+    const route = chooseAsrChannel({
+      streamingReady,
+      conversational: config.handsFree || config.wakeRequired,
+    });
+    if (!model || route.channel !== "realtime") return { streaming: false as const };
     const key = getSecret(modelSecretName(model.id));
     if (!key) return { streaming: false as const };
     try {
@@ -488,6 +494,8 @@ export function registerIpc(deps: IpcDeps): void {
   });
 
   /* --------------------------------------------------------- 悬浮窗 */
+
+  handle(IPC.costStats, () => channelStats());
 
   handle(IPC.overlayState, (): OverlayState => {
     const config = getConfig();

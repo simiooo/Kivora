@@ -70,7 +70,7 @@ export interface ChangeEvent {
   kind: ChangeKind;
   at: number;
   /** speech 事件带内容 */
-  speech?: SpeechClip & { id: string };
+  speech?: SpeechClip & { id: string; utteranceId?: string; chunkIndex?: number; isLast?: boolean };
   /** voice 事件带实时电平（0–1），悬浮窗的波纹照着它画 */
   level?: number;
   /** voice 事件的流式识别中间结果（边说边出字） */
@@ -128,6 +128,7 @@ export const IPC = {
   configHotkey: "kivora:config:hotkey",
 
   setupComplete: "kivora:setup:complete",
+  costStats: "kivora:cost:stats",
   overlayState: "kivora:overlay:state",
   overlayAsk: "kivora:overlay:ask",
   overlayOpenMain: "kivora:overlay:open-main",
@@ -207,6 +208,8 @@ export interface KivoraBridge {
 
   completeSetup(): Promise<AppConfig>;
 
+  /** 本机用量分档（反射 / 短补全 / 批次语音 / 实时），关于页展示 */
+  costStats(): Promise<import("./domain.ts").CostStats>;
   getOverlayState(): Promise<OverlayState>;
   overlayAsk(): Promise<void>;
   overlayOpenMain(): Promise<void>;

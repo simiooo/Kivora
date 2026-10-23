@@ -330,6 +330,8 @@ function VoiceSection({
     const binding = (bindings.data ?? []).find((item) => item.module === "asr");
     return (models.data ?? []).find((model) => model.id === binding?.modelId) ?? null;
   }, [bindings.data, models.data]);
+  // 唤醒词门只能建在流式识别上：绑定的是批式模型时，这条开关不生效，得说清楚
+  const streamingReady = Boolean(asrModel && /-streaming$|-realtime-|-realtime$/i.test(asrModel.modelId));
 
   const ttsModel = useMemo(() => {
     const binding = (bindings.data ?? []).find((item) => item.module === "tts");
@@ -393,8 +395,13 @@ function VoiceSection({
         />
         <ToggleRow
           title="先说唤醒词"
-          description="免按键时要求先叫名字，再说要做什么。需要绑定流式识别模型（预设里的「Qwen 流式识别」）：它会先把开口后约 1.5 秒的音频送去识别，看有没有叫名字——没叫就整段丢掉。这段音频仍会经过识别服务，介意就别开。"
+          description={
+            streamingReady
+              ? "免按键时要求先叫名字，再说要做什么。它会先把开口后约 1.6 秒的音频送去识别，看有没有叫名字——没叫就整段丢掉。这段音频仍会经过识别服务，介意就别开。"
+              : "现在不生效：唤醒词门需要流式识别模型（模型页预设里的「Qwen 流式识别」）。当前绑定的是批式模型，打开也只会按普通免按键工作。"
+          }
           checked={bootstrap.config.wakeRequired}
+          disabled={!streamingReady}
           onChange={(value) =>
             void onConfig({ wakeRequired: value }).catch((err) =>
               toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
@@ -848,6 +855,11 @@ function PermissionsSection({
 /* ------------------------------------------------------------- 关于 */
 
 function AboutSection({ bootstrap }: { bootstrap: Bootstrap }): React.JSX.Element {
+  // 本机用量分档：让"实时 ≤3%"这类预算不是口号，而是能看到的数字
+  const stats = useLiveData(() => bridge.costStats(), ["sessions", "timeline"]);
+  const usage = stats.data
+    ? `${stats.data.total} 轮 · 反射 ${stats.data.a0} · 短补全 ${stats.data.a1} · 批次语音 ${stats.data.a2} · 实时 ${stats.data.l3}（${Math.round(stats.data.realtimeRatio * 100)}%）`
+    : "还没开始统计";
   const rows: Array<[string, string]> = [
     ["版本", `${bootstrap.state.version}（schema v${bootstrap.state.schemaVersion}）`],
     ["Electron", bootstrap.state.electron],
@@ -858,6 +870,7 @@ function AboutSection({ bootstrap }: { bootstrap: Bootstrap }): React.JSX.Elemen
       bootstrap.config.taskRuntime === "pi" ? "Pi 会话" : "内置（文件整理）",
     ],
     ["凭据", bootstrap.state.secretsAvailable ? "Windows 凭据管理器（DPAPI）" : "不可用，Key 以明文存本地"],
+    ["用量分档", usage],
     ["数据库", displayPath(bootstrap.state.dbPath, 56)],
     ["数据目录", displayPath(bootstrap.state.dataDir, 56)],
   ];

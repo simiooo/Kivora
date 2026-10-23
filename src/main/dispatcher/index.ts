@@ -1,4 +1,4 @@
-import type { Message, Session, TurnResult } from "../../shared/domain.ts";
+﻿import type { Message, Session, TurnResult } from "../../shared/domain.ts";
 import { isActive, newId } from "../../shared/domain.ts";
 import {
   appendEvent,
@@ -25,6 +25,7 @@ import { mockMode, piAvailable } from "../env.ts";
 import { beginTurn, isCurrentTurn, setThinking } from "../turn-state.ts";
 import { acknowledgmentFor, isQuestion, looksActionable, stripWakeName } from "./ack.ts";
 import { buildBrainContext } from "./brain-context.ts";
+import { noteTurn } from "../cost-router.ts";
 import { setConfig } from "../repos/config.ts";
 import { broadcast, speak } from "../bus.ts";
 import { getConfig } from "../repos/config.ts";
@@ -248,6 +249,9 @@ export async function handleUtterance(
   let decision: BrainDecision | null = null;
   // 模型是真的失败了，和"没配模型"要分开：前者该说一句降级提示（方案 3.10）
   const brainFailed: { failed?: boolean } = {};
+  // 成本分档：反射零模型 / 一次短补全 / 建任务（批次语音）
+  const reflexKinds = new Set(["approve", "cancel", "status", "retry", "resume", "promote", "config", "help"]);
+  if (reflexKinds.has(intent.kind)) noteTurn("a0");
 
   // 反射只想"建任务"时，先问一次调度模型：它可能只是问个问题，不该开任务
   if (intent.kind === "create_task") {
@@ -262,6 +266,7 @@ export async function handleUtterance(
 
     // 只是问一件事：直接答，不建会话（否则会掉进"这条指令需要浏览器"）
     if (decision?.action === "answer") {
+      noteTurn("a1");
       const text = decision.speech?.trim() || decision.question?.trim() || "这个我暂时答不上来。";
       say(turn, text);
       return { messages: turn.messages, action: { kind: "none" }, spoken: text };
@@ -488,6 +493,7 @@ export async function handleUtterance(
       }
       say(turn, scenario.narration, { sessionId: session.id });
       launch(session.id);
+      noteTurn("a2");
       return {
         messages: turn.messages,
         action: { kind: "task_created", sessionId: session.id, title: finalTitle, queued: false },

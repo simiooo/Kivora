@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useBootstrap, useRoute } from "../lib/hooks.ts";
 import { bridge } from "../lib/bridge.ts";
 import { playClip, stopPlayback } from "../lib/audio.ts";
+import { SpeechPlayer } from "../lib/speech-player.ts";
 import { ToastProvider, Spinner } from "../components/ui.tsx";
 import { TimelinePage } from "../pages/TimelinePage.tsx";
 import { HistoryPage } from "../pages/HistoryPage.tsx";
@@ -12,15 +13,24 @@ export default function App(): React.JSX.Element {
   const { data, reload, patchConfig } = useBootstrap();
   const { route, navigate } = useRoute();
 
-  // 语音播报：主进程把音频推过来，这里统一播（新语音抢占旧语音）
+  // 播报队列：同一句分几段就按顺序播，新的一句抢占旧的一句
+  const player = useRef(
+    new SpeechPlayer(
+      (chunk, onDone) => void playClip(chunk.audioBase64, chunk.mime, onDone),
+      () => stopPlayback(60),
+      () => bridge.speechDone(),
+    ),
+  );
+
   useEffect(() => {
     return bridge.subscribe((event) => {
       if (event.kind === "speech-stop") {
+        player.current.clear();
         stopPlayback(60);
         return;
       }
       if (event.kind === "speech" && event.speech?.audioBase64) {
-        void playClip(event.speech.audioBase64, event.speech.mime, () => bridge.speechDone());
+        player.current.push({ ...event.speech, audioBase64: event.speech.audioBase64 });
       }
     });
   }, []);

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Kivora 的领域模型。主进程与渲染进程共用同一份定义，
  * 保证 IPC 两侧不会各自漂移（所有输入在 IPC 边界用 zod 再校验一次）。
  */
@@ -468,6 +468,16 @@ export interface McpPreset {
   server: McpServerInput;
 }
 
+/** 本机用量分档：反射 / 短补全 / 批次语音 / 实时（关于页展示） */
+export interface CostStats {
+  total: number;
+  a0: number;
+  a1: number;
+  a2: number;
+  l3: number;
+  realtimeRatio: number;
+  realtimeAllowed: boolean;
+}
 export interface OverlayState {
   listening: boolean;
   pendingApproval: Approval | null;
