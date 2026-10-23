@@ -84,7 +84,7 @@ export function countModels(): number {
 }
 
 
-function assertProviderFits(provider: ProviderKind, capability: Capability): void {
+function assertProviderFits(provider: ProviderKind, capability: Capability, baseUrl: string): void {
   if (provider === "dashscope" && capability === "chat") {
     throw new AppError("conflict", {
       message: "DashScope 这个连接只用于语音（识别/合成）；对话请用 OpenAI / Anthropic 兼容端点。",
@@ -93,9 +93,19 @@ function assertProviderFits(provider: ProviderKind, capability: Capability): voi
   if (provider === "anthropic" && capability !== "chat") {
     throw new AppError("conflict", { message: "Anthropic 只支持对话模型。" });
   }
+  if (/^wss?:/i.test(baseUrl) && provider !== "dashscope") {
+    throw new AppError("conflict", {
+      message: "这是 WebSocket 地址，提供方要选「DashScope WebSocket」。",
+    });
+  }
+  if (/^https?:/i.test(baseUrl) && provider === "dashscope") {
+    throw new AppError("conflict", {
+      message: "DashScope WebSocket 的地址要以 wss:// 开头。",
+    });
+  }
 }
 export function createModel(draft: ModelDraft): ModelRecord {
-  assertProviderFits(draft.provider, draft.capability);
+  assertProviderFits(draft.provider, draft.capability, draft.baseUrl);
   const id = newId("m");
   const now = Date.now();
   tx(() => {
@@ -126,7 +136,7 @@ export function createModel(draft: ModelDraft): ModelRecord {
 }
 
 export function updateModel(draft: ModelDraft & { id: string }): ModelRecord {
-  assertProviderFits(draft.provider, draft.capability);
+  assertProviderFits(draft.provider, draft.capability, draft.baseUrl);
   const current = getModel(draft.id);
   if (!current) throw new AppError("not_found", { message: "这个模型已经不在了。" });
   const now = Date.now();
@@ -222,18 +232,70 @@ export function bindModel(module: ModuleKey, modelId: string | null): Binding[] 
 const DASHSCOPE_WS = "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference";
 const QWEN_VOICE = "longanhuan_v3.1";
 
-/**
- * 默认栈：调度/任务用 DeepSeek，识别/合成用 Qwen Audio 3.1。
- * 语音这组里：
- * - asr-flash-message 面向"一句话一条消息"的短音频，正好是我们按次上传的 clip
- * - tts-flash 是低延迟合成，首响优先
- * - filetrans 是长音频文件、realtime-plus 是流式、tts-next 是下一代，留作预设不设默认
- */
+/** 同一 (提供方/能力/地址/模型 ID) 只留一条：优先留被绑定的、有 Key 的、最早的那条。 */
+export function dedupeModels(): number {
+  const groups = db()
+    .prepare(
+      "SELECT provider, capability, base_url, model_id, COUNT(*) AS n FROM models GROUP BY provider, capability, base_url, model_id HAVING n > 1",
+    )
+    .all() as Array<{ provider: string; capability: string; base_url: string; model_id: string }>;
+  let removed = 0;
+  for (const group of groups) {
+    const rows = db()
+      .prepare(
+        "SELECT id FROM models WHERE provider = ? AND capability = ? AND base_url = ? AND model_id = ? ORDER BY created_at ASC, id ASC",
+      )
+      .all(group.provider, group.capability, group.base_url, group.model_id) as Array<{ id: string }>;
+    const isBound = (id: string): boolean => Boolean(db().prepare("SELECT 1 AS ok FROM bindings WHERE model_id = ?").get(id));
+    const keep = rows.find((row) => isBound(row.id)) ?? rows.find((row) => hasSecret(modelSecretName(row.id))) ?? rows[0];
+    for (const row of rows) {
+      if (row.id === keep.id) continue;
+      // 被绑定的绝不能删；其余即使有 Key 也删（它们配置完全相同，属于重复条目）
+      if (isBound(row.id)) continue;
+      deleteSecret(modelSecretName(row.id));
+      db().prepare("DELETE FROM models WHERE id = ?").run(row.id);
+      removed += 1;
+    }
+  }
+  if (removed > 0) console.log(`[kivora] removed ${removed} duplicate models`);
+  return removed;
+}
+/** DeepSeek 的模型名变了：把旧的 deepseek-chat 换成 deepseek-v4.1-flash；顺手把地址补成 /v1。 */
+export function migrateDeepSeekModelIds(): number {
+  const now = Date.now();
+  const renamed = db()
+    .prepare("UPDATE models SET model_id = 'deepseek-v4.1-flash', name = 'DeepSeek V4.1 Flash', updated_at = ? WHERE model_id = 'deepseek-chat'")
+    .run(now);
+  // https://api.deepseek.com 和 .../v1 都通，但统一成 /v1 才能跟种子合并成一条
+  const normalized = db()
+    .prepare("UPDATE models SET base_url = 'https://api.deepseek.com/v1', updated_at = ? WHERE base_url IN ('https://api.deepseek.com', 'https://api.deepseek.com/')")
+    .run(now);
+  let removed = 0;
+  const legacy = db()
+    .prepare("SELECT id FROM models WHERE model_id = 'deepseek-reasoner'")
+    .all() as Array<{ id: string }>;
+  for (const row of legacy) {
+    const bound = db().prepare("SELECT 1 AS ok FROM bindings WHERE model_id = ?").get(row.id);
+    if (bound || hasSecret(modelSecretName(row.id))) {
+      db().prepare("UPDATE models SET name = 'DeepSeek Reasoner（旧）', updated_at = ? WHERE id = ?").run(now, row.id);
+    } else {
+      db().prepare("DELETE FROM models WHERE id = ?").run(row.id);
+      removed += 1;
+    }
+  }
+  const total = Number(renamed.changes) + Number(normalized.changes) + removed;
+  if (total > 0) {
+    console.log(
+      `[kivora] deepseek ids migrated: renamed=${renamed.changes} normalized=${normalized.changes} removed=${removed}`,
+    );
+  }
+  return total;
+}
 /** 上一版把 Qwen 语音默认成了 HTTP 兼容端点；这里把这两条纠正成 WebSocket。 */
 export function migrateLegacyVoiceSeeds(): number {
   const rows = db()
     .prepare(
-      "SELECT id, model_id FROM models WHERE provider = 'openai' AND base_url = 'https://dashscope.aliyuncs.com/compatible-mode/v1' AND model_id LIKE 'qwen-audio-3.1-%'",
+      "SELECT id, model_id FROM models WHERE (provider = 'openai' AND base_url = 'https://dashscope.aliyuncs.com/compatible-mode/v1' AND model_id LIKE 'qwen-audio-3.1-%') OR (provider = 'openai' AND base_url LIKE 'wss://%')",
     )
     .all() as Array<{ id: string; model_id: string }>;
   if (rows.length === 0) return 0;
@@ -247,15 +309,22 @@ export function migrateLegacyVoiceSeeds(): number {
   return rows.length;
 }
 
+/**
+ * 默认栈：调度/任务用 DeepSeek，识别/合成用 Qwen Audio 3.1。
+ * 语音这组里：
+ * - asr-flash-message 面向"一句话一条消息"的短音频，正好是我们按次上传的 clip
+ * - tts-flash 是低延迟合成，首响优先
+ * - filetrans 是长音频文件、realtime-plus 是流式、tts-next 是下一代，留作预设不设默认
+ */
 export function seedModels(): void {
   if (countModels() > 0) return;
   const seeds: Array<Omit<ModelDraft, "apiKey">> = [
     {
-      name: "DeepSeek Chat",
+      name: "DeepSeek V4.1 Flash",
       provider: "openai",
       capability: "chat",
       baseUrl: "https://api.deepseek.com/v1",
-      modelId: "deepseek-chat",
+      modelId: "deepseek-v4.1-flash",
       params: { ...DEFAULT_PARAMS },
       headers: [],
     },
@@ -275,15 +344,6 @@ export function seedModels(): void {
       baseUrl: DASHSCOPE_WS,
       modelId: "qwen-audio-3.1-tts-flash",
       params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null, voice: QWEN_VOICE, speed: 1 },
-      headers: [],
-    },
-    {
-      name: "DeepSeek Reasoner",
-      provider: "openai",
-      capability: "chat",
-      baseUrl: "https://api.deepseek.com/v1",
-      modelId: "deepseek-reasoner",
-      params: { ...DEFAULT_PARAMS, maxTokens: 8192 },
       headers: [],
     },
     {

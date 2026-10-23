@@ -101,6 +101,13 @@ interface ConnectResult {
   close: () => void;
 }
 
+function handshakeError(status: number, body: string): AppError {
+  const detail = body.slice(0, 600) || `HTTP ${status}`;
+  if (status === 401 || status === 403) return new AppError("auth_failed", { detail });
+  if (status === 429) return new AppError("rate_limited", { detail });
+  if (status >= 500) return new AppError("upstream_error", { message: `语音服务返回 ${status}。`, detail });
+  return new AppError("bad_response", { message: `语音服务拒绝了连接（HTTP ${status}）。`, detail });
+}
 function connect(url: string, apiKey: string, timeoutMs: number): Promise<ConnectResult> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -129,7 +136,33 @@ function connect(url: string, apiKey: string, timeoutMs: number): Promise<Connec
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      reject(new AppError("unreachable", { message: "连不上语音服务。", detail: err instanceof Error ? err.message : String(err) }));
+      const message = err instanceof Error ? err.message : String(err);
+      // ws 对非 101 的握手有时直接抛 error，而不是 unexpected-response
+      const statusMatch = /Unexpected server response:\s*(\d{3})/i.exec(message);
+      reject(
+        statusMatch
+          ? handshakeError(Number(statusMatch[1]), message)
+          : new AppError("unreachable", { message: "连不上语音服务。", detail: message }),
+      );
+    });
+    // 服务端拒绝握手（401 之类）不会走 open/error，而是 unexpected-response
+    socket.once("unexpected-response", (_request, response) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const status = response.statusCode ?? 0;
+      const chunks: Buffer[] = [];
+      response.on("data", (data) => chunks.push(Buffer.from(data as Buffer)));
+      response.on("end", () => {
+        const body = Buffer.concat(chunks).toString("utf8").slice(0, 600);
+        const appError = handshakeError(status, body);
+        try {
+          socket.terminate();
+        } catch {
+          // ignore
+        }
+        reject(appError);
+      });
     });
   });
 }

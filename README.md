@@ -113,7 +113,9 @@ pnpm shots      # 七个界面全截图到 artifacts/
 Windows 凭据管理器（DPAPI）        # API Key，只存密文
 ```
 
-事件与审计按设置里的天数清理（默认 7 天），消息不自动删。\n\n默认模型栈：调度/任务 `deepseek-chat`（`https://api.deepseek.com/v1`），识别 `qwen-audio-3.1-asr-flash-message`、合成 `qwen-audio-3.1-tts-flash`（默认 Base URL 指向一家 OpenAI 兼容的音频端点，换厂商只改 Base URL/Key/模型 ID）。语音这两条走 **WebSocket**（DashScope 协议：`run-task` → 二进制/`continue-task` → `finish-task`，事件 `task-started/result-generated/task-finished/task-failed`），不是 OpenAI 的 `/audio/*` HTTP 接口；录音直接采 16k 单声道 WAV 再发过去。长文件转写用 `...-filetrans`、下一代合成用 `...-tts-next`、流式用 `...-realtime-plus`。
+事件与审计按设置里的天数清理（默认 7 天），消息不自动删。
+
+默认模型栈：调度/任务 `deepseek-v4.1-flash`（`https://api.deepseek.com/v1`），识别 `qwen-audio-3.1-asr-flash-message`、合成 `qwen-audio-3.1-tts-flash`（默认 Base URL 指向一家 OpenAI 兼容的音频端点，换厂商只改 Base URL/Key/模型 ID）。语音这两条走 **WebSocket**（DashScope 协议：`run-task` → 二进制/`continue-task` → `finish-task`，事件 `task-started/result-generated/task-finished/task-failed`），不是 OpenAI 的 `/audio/*` HTTP 接口；录音直接采 16k 单声道 WAV 再发过去。长文件转写用 `...-filetrans`、下一代合成用 `...-tts-next`、流式用 `...-realtime-plus`。
 
 ## 已知边界（说清楚，不假装）
 

@@ -463,7 +463,7 @@ export function registerIpc(deps: IpcDeps): void {
 }
 
 const PRESETS: ModelPreset[] = [
-  { label: "DeepSeek", provider: "openai", baseUrl: "https://api.deepseek.com/v1", capability: "chat", modelId: "deepseek-chat" },
+  { label: "DeepSeek", provider: "openai", baseUrl: "https://api.deepseek.com/v1", capability: "chat", modelId: "deepseek-v4.1-flash" },
   { label: "OpenAI", provider: "openai", baseUrl: "https://api.openai.com/v1", capability: "chat", modelId: "gpt-4.1-mini" },
   {
     label: "Anthropic",

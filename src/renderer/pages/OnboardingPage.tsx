@@ -147,7 +147,7 @@ function ConnectStep({
 }): React.JSX.Element {
   const toast = useToast();
   const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com/v1");
-  const [modelId, setModelId] = useState("deepseek-chat");
+  const [modelId, setModelId] = useState("deepseek-v4.1-flash");
   const [apiKey, setApiKey] = useState("");
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
@@ -182,7 +182,8 @@ function ConnectStep({
         const saved = await bridge.saveModel({
           id: existing?.id,
           name: existing?.name ?? fallbackName,
-          provider: "openai",
+          // Base URL 是 wss 就走 DashScope 的 WebSocket；否则按 OpenAI 兼容 HTTP
+          provider: base.startsWith("ws") ? "dashscope" : "openai",
           capability,
           baseUrl: base,
           modelId: modelName.trim(),
@@ -203,10 +204,12 @@ function ConnectStep({
         speed: 1,
       });
       const [asrResult, ttsResult] = await Promise.all([bridge.testModel(asr.id), bridge.testModel(tts.id)]);
-      const failures = [
-        asrResult.ok ? null : `识别：${asrResult.error?.message ?? "失败"}`,
-        ttsResult.ok ? null : `合成：${ttsResult.error?.message ?? "失败"}`,
-      ].filter(Boolean);
+      const describe = (label: string, result: { ok: boolean; error?: { message?: string; detail?: string | null } | null }): string | null => {
+        if (result.ok) return null;
+        const detail = result.error?.detail?.split("\n")[0];
+        return `${label}：${result.error?.message ?? "失败"}${detail ? `（${detail}）` : ""}`;
+      };
+      const failures = [describe("识别", asrResult), describe("合成", ttsResult)].filter(Boolean);
       setVoiceState({
         asr: asrResult.ok ? "ok" : "fail",
         tts: ttsResult.ok ? "ok" : "fail",
@@ -232,9 +235,16 @@ function ConnectStep({
     setTesting(true);
     setResult(null);
     try {
+      const models = await bridge.listModels();
+      const normalizedBase = baseUrl.trim().replace(/\/+$/, "");
+      // 点第二次「测试连接」时复用同一个模型，别再堆一条
+      const existing =
+        model ??
+        models.find(
+          (item) => item.capability === "chat" && item.baseUrl === normalizedBase && item.modelId === modelId.trim(),
+        );
       const saved = await bridge.saveModel({
-        // 重复点「测试连接」不应该堆出一堆同名模型
-        id: model?.id,
+        id: existing?.id,
         name: modelId.trim() || "主模型",
         provider: "openai",
         capability: "chat",

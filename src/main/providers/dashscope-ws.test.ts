@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { AddressInfo } from "node:net";
+import { createServer } from "node:http";
 import { buildFinish, buildTtsContinue, buildTtsStart, synthesizeViaWebSocket, transcribeViaWebSocket } from "./dashscope-ws.ts";
 
 interface TestServer {
@@ -148,6 +149,21 @@ describe("DashScope WebSocket 协议", () => {
     await expect(
       synthesizeViaWebSocket({ url: active.url, apiKey: "bad", model: "m", text: "hi" }),
     ).rejects.toThrow(/Invalid API-key/);
+  });
+
+  it("握手 401 映射成 auth_failed，而不是「连不上」", async () => {
+    const http = createServer();
+    http.on("upgrade", (_request, socket) => {
+      socket.end(
+        "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nbad api key",
+      );
+    });
+    await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", () => resolve()));
+    const port = (http.address() as AddressInfo).port;
+    await expect(
+      synthesizeViaWebSocket({ url: `ws://127.0.0.1:${port}`, apiKey: "bad", model: "m", text: "hi" }),
+    ).rejects.toMatchObject({ code: "auth_failed" });
+    await new Promise<void>((resolve) => http.close(() => resolve()));
   });
 
   it("消息构造带上 task_id 与 duplex", () => {
