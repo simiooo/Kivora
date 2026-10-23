@@ -98,6 +98,18 @@ export interface RecordOptions {
   endpoint?: EndpointOptionsInput;
   /** 端点事件：speech-end 该收尾，no-speech 该提示没听到 */
   onEndpoint?: (event: EndpointEvent) => void;
+  /** 边录边要的原始 PCM（16k 单声道），给流式识别用 */
+  onPcm?: (samples: Float32Array) => void;
+}
+
+/** Float32 PCM → 16bit little-endian 的 base64，流式识别要的就是这个 */
+export function pcm16ToBase64(samples: Float32Array): string {
+  const pcm = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const value = Math.max(-1, Math.min(1, samples[i] as number));
+    pcm[i] = value < 0 ? value * 0x8000 : value * 0x7fff;
+  }
+  return toBase64(new Uint8Array(pcm.buffer));
 }
 
 export class Recorder {
@@ -110,6 +122,7 @@ export class Recorder {
   private raf = 0;
   private endpointer: Endpointer | null = null;
   private onEndpoint: ((event: EndpointEvent) => void) | null = null;
+  private onPcm: ((samples: Float32Array) => void) | null = null;
   private samplesSeen = 0;
 
   get active(): boolean {
@@ -146,10 +159,12 @@ export class Recorder {
     this.chunks = [];
     this.endpointer = options.endpoint ? new Endpointer(options.endpoint) : null;
     this.onEndpoint = options.onEndpoint ?? null;
+    this.onPcm = options.onPcm ?? null;
     this.samplesSeen = 0;
     processor.onaudioprocess = (event) => {
       const channel = event.inputBuffer.getChannelData(0);
       this.chunks.push(new Float32Array(channel));
+      this.onPcm?.(new Float32Array(channel));
       if (!this.endpointer || !this.onEndpoint) return;
       // 4096 一帧太粗（256ms），切成 512（32ms）再判端点，才不会把短句吃掉
       const block = 512;
@@ -211,6 +226,7 @@ export class Recorder {
     this.analyser = null;
     this.endpointer = null;
     this.onEndpoint = null;
+    this.onPcm = null;
     this.chunks = [];
     void this.context?.close().catch(() => undefined);
     this.context = null;

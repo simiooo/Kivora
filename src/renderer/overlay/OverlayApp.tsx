@@ -22,6 +22,7 @@ void (async (): Promise<void> => {
 export function OverlayApp(): React.JSX.Element | null {
   const [state, setState] = useState<OverlayState | null>(null);
   const [level, setLevel] = useState(0);
+  const [partial, setPartial] = useState("");
   const cardRef = useRef<HTMLDivElement>(null);
   const lastHeight = useRef(0);
 
@@ -38,6 +39,7 @@ export function OverlayApp(): React.JSX.Element | null {
     return bridge.subscribe((event) => {
       if (event.kind === "voice") {
         setLevel(event.level ?? 0);
+        if (typeof event.partial === "string") setPartial(event.partial);
         return;
       }
       if (["overlay", "approvals", "sessions", "queue", "config"].includes(event.kind)) void load();
@@ -118,6 +120,9 @@ export function OverlayApp(): React.JSX.Element | null {
         {listening ? (
           <div className="px-5 pb-4">
             <Bars level={level} />
+            {partial ? (
+              <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-foreground/80">{partial}</p>
+            ) : null}
             <p className="mt-2 text-[11px] text-faint">
               {state.autoStop ? "说完会自动结束；不想发就点「停」" : "说完点「停」，或按 Esc 取消这一句"}
             </p>

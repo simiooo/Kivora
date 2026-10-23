@@ -1,4 +1,4 @@
-import WebSocket from "ws";
+﻿import WebSocket from "ws";
 import { AppError } from "../../shared/errors.ts";
 
 /**
@@ -97,19 +97,19 @@ function taskId(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-interface ConnectResult {
+export interface ConnectResult {
   socket: WebSocket;
   close: () => void;
 }
 
-function handshakeError(status: number, body: string): AppError {
+export function handshakeError(status: number, body: string): AppError {
   const detail = body.slice(0, 600) || `HTTP ${status}`;
   if (status === 401 || status === 403) return new AppError("auth_failed", { detail });
   if (status === 429) return new AppError("rate_limited", { detail });
   if (status >= 500) return new AppError("upstream_error", { message: `语音服务返回 ${status}。`, detail });
   return new AppError("bad_response", { message: `语音服务拒绝了连接（HTTP ${status}）。`, detail });
 }
-function connect(url: string, apiKey: string, timeoutMs: number): Promise<ConnectResult> {
+export function connectWs(url: string, apiKey: string, timeoutMs: number): Promise<ConnectResult> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const socket = new WebSocket(url, {
@@ -228,7 +228,7 @@ export async function synthesizeViaWebSocket(request: TtsRequest): Promise<{ aud
   const sampleRate = request.sampleRate ?? DEFAULT_TTS_SAMPLE_RATE;
   const voice = request.voice || DEFAULT_TTS_VOICE;
   const speed = typeof request.speed === "number" && Number.isFinite(request.speed) ? Math.min(2, Math.max(0.5, request.speed)) : 1;
-  const { socket, close } = await connect(request.url, request.apiKey, request.timeoutMs ?? 20_000);
+  const { socket, close } = await connectWs(request.url, request.apiKey, request.timeoutMs ?? 20_000);
 
   return await new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -299,7 +299,7 @@ export async function transcribeViaWebSocket(request: AsrRequest): Promise<{ tex
   const startedAt = Date.now();
   const id = taskId();
   const sampleRate = request.sampleRate ?? DEFAULT_ASR_SAMPLE_RATE;
-  const { socket, close } = await connect(request.url, request.apiKey, request.timeoutMs ?? 40_000);
+  const { socket, close } = await connectWs(request.url, request.apiKey, request.timeoutMs ?? 40_000);
 
   return await new Promise((resolve, reject) => {
     const sentences: string[] = [];

@@ -73,6 +73,8 @@ export interface ChangeEvent {
   speech?: SpeechClip & { id: string };
   /** voice 事件带实时电平（0–1），悬浮窗的波纹照着它画 */
   level?: number;
+  /** voice 事件的流式识别中间结果（边说边出字） */
+  partial?: string;
 }
 
 export const IPC = {
@@ -81,6 +83,10 @@ export const IPC = {
   tasksList: "kivora:timeline:tasks",
   send: "kivora:timeline:send",
   transcribe: "kivora:voice:transcribe",
+  asrStreamStart: "kivora:voice:stream-start",
+  asrStreamChunk: "kivora:voice:stream-chunk",
+  asrStreamFinish: "kivora:voice:stream-finish",
+  asrStreamCancel: "kivora:voice:stream-cancel",
   speak: "kivora:voice:speak",
 
   sessionsList: "kivora:sessions:list",
@@ -151,6 +157,11 @@ export interface KivoraBridge {
   listActiveTasks(): Promise<Session[]>;
   send(text: string): Promise<TurnResult>;
   transcribe(base64: string, mime: string, dispatch?: boolean): Promise<Transcript>;
+  /** 流式识别：绑定的识别模型支持时返回 { streaming: true, id }，否则让调用方退回批式 */
+  asrStreamStart(): Promise<{ streaming: false } | { streaming: true; id: string }>;
+  asrStreamChunk(id: string, base64: string): Promise<void>;
+  asrStreamFinish(id: string): Promise<{ text: string }>;
+  asrStreamCancel(id: string): Promise<void>;
   speak(text: string): Promise<SpeechClip>;
 
   listSessions(query?: string): Promise<SessionListItem[]>;

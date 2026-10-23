@@ -1,4 +1,4 @@
-import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+﻿import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { IPC, type ModelPreset } from "../shared/ipc.ts";
 import type { AppConfig, ApprovalResolution, ModuleKey, OverlayState } from "../shared/domain.ts";
@@ -40,7 +40,10 @@ import { getSecret, modelSecretName } from "./secrets.ts";
 import { listServers, mcpCapability, MCP_PRESETS, removeServer, saveServer } from "./mcp.ts";
 import { assertProbeable, probeMcpServer } from "./mcp-client.ts";
 import { probeModel } from "./providers/probe.ts";
+import { AsrStream, isStreamingAsrModel } from "./providers/dashscope-stream.ts";
 import { mockMode } from "./env.ts";
+import { getBoundModel } from "./repos/models.ts";
+import { newId } from "../shared/domain.ts";
 import { synthesizeSpeech, transcribeAudio } from "./voice.ts";
 import { broadcast, isSpeaking, setSpeaking } from "./bus.ts";
 import { interruptTurn, isThinking } from "./turn-state.ts";
@@ -202,6 +205,61 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.speak, async (_event, raw) => {
     const text = parse(z.string().trim().min(1).max(600), raw);
     return synthesizeSpeech(text);
+  });
+
+  /* ------------------------------------------------- 流式识别（边说边出字） */
+
+  const streams = new Map<string, AsrStream>();
+
+  handle(IPC.asrStreamStart, async () => {
+    const model = getBoundModel("asr");
+    if (!model || model.provider !== "dashscope" || !isStreamingAsrModel(model.modelId)) {
+      return { streaming: false as const };
+    }
+    const key = getSecret(modelSecretName(model.id));
+    if (!key) return { streaming: false as const };
+    try {
+      const stream = await AsrStream.start({
+        url: model.baseUrl,
+        apiKey: key,
+        model: model.modelId,
+        onPartial: (text) => broadcast("voice", { partial: text }),
+      });
+      const id = newId("asr");
+      streams.set(id, stream);
+      return { streaming: true as const, id };
+    } catch (err) {
+      // 流式起不来就退回批式，别让用户因为这功能听不见
+      console.warn("[kivora] asr stream failed, fallback to batch", err instanceof Error ? err.message : err);
+      return { streaming: false as const };
+    }
+  });
+
+  handle(IPC.asrStreamChunk, (_event, rawId, rawBase64) => {
+    const id = parse(z.string().max(40), rawId);
+    const base64 = parse(z.string().max(4_000_000), rawBase64);
+    streams.get(id)?.push(new Uint8Array(Buffer.from(base64, "base64")));
+  });
+
+  handle(IPC.asrStreamFinish, async (_event, rawId) => {
+    const id = parse(z.string().max(40), rawId);
+    const stream = streams.get(id);
+    if (!stream) return { text: "" };
+    streams.delete(id);
+    const { text } = await stream.finish();
+    broadcast("voice", { partial: "" });
+    if (text.trim()) {
+      await handleUtterance(text, { source: "voice" });
+      broadcast("timeline");
+    }
+    return { text };
+  });
+
+  handle(IPC.asrStreamCancel, (_event, rawId) => {
+    const id = parse(z.string().max(40), rawId);
+    streams.get(id)?.cancel();
+    streams.delete(id);
+    broadcast("voice", { partial: "" });
   });
 
   /* ----------------------------------------------------------- 会话 */
@@ -508,6 +566,14 @@ const PRESETS: ModelPreset[] = [
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     capability: "chat",
     modelId: "qwen-plus",
+  },
+  {
+    // 流式识别（边说边出字）：绑到这个模型，说话时就走 asrStream* 这条路
+    label: "Qwen 流式识别",
+    provider: "dashscope",
+    baseUrl: "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference",
+    capability: "asr",
+    modelId: "qwen-audio-3.1-asr-flash-streaming",
   },
   {
     label: "硅基流动",

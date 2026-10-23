@@ -61,6 +61,10 @@ const api: KivoraBridge = {
   listActiveTasks: () => invoke(IPC.tasksList),
   send: (text) => invoke(IPC.send, text),
   transcribe: (base64, mime, dispatch) => invoke(IPC.transcribe, base64, mime, dispatch),
+  asrStreamStart: () => invoke(IPC.asrStreamStart),
+  asrStreamChunk: (id, base64) => invoke(IPC.asrStreamChunk, id, base64),
+  asrStreamFinish: (id) => invoke(IPC.asrStreamFinish, id),
+  asrStreamCancel: (id) => invoke(IPC.asrStreamCancel, id),
   speak: (text) => invoke(IPC.speak, text),
 
   listSessions: (query) => invoke(IPC.sessionsList, query),

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, Mic, Square, X } from "lucide-react";
 import { bridge } from "../lib/bridge.ts";
-import { Recorder, isSpeakingAudio, listMics, type MicDevice } from "../lib/audio.ts";
+import { Recorder, isSpeakingAudio, listMics, pcm16ToBase64, type MicDevice } from "../lib/audio.ts";
+import { concatFloat32 } from "@shared/wav.ts";
 import { WakeGate } from "../lib/wake.ts";
 import { cn } from "../lib/utils.ts";
 import { useToast } from "./ui.tsx";
@@ -38,6 +39,7 @@ export function Composer({
   const inputRef = useRef<HTMLInputElement>(null);
   const lastLevelAt = useRef(0);
   // 端点检测在音频回调里跑，回调引用最新的收尾函数
+  const streamRef = useRef<string | null>(null);
   const stopRef = useRef<() => void>(() => undefined);
   const cancelRef = useRef<() => void>(() => undefined);
 
@@ -94,6 +96,11 @@ export function Composer({
     }
     setRecording(true);
     setLevel(0);
+    // 识别模型是流式的就边说边传；不是、或者服务没起来，就退回"录完再传"
+    const stream = await bridge.asrStreamStart().catch(() => ({ streaming: false as const }));
+    streamRef.current = stream.streaming ? stream.id : null;
+    const pending: Float32Array[] = [];
+    let pendingSamples = 0;
     try {
       await recorder.current.start(micId || undefined, reportLevel, {
         // 说完自动结束：只开能量端点检测，不额外下载模型
@@ -106,8 +113,23 @@ export function Composer({
             else cancelRef.current();
           }, 0);
         },
+        // 每 200ms 推一段 16k/16bit PCM（3200 个采样）
+        onPcm: stream.streaming
+          ? (samples) => {
+              const id = streamRef.current;
+              if (!id) return;
+              pending.push(samples);
+              pendingSamples += samples.length;
+              if (pendingSamples < 3_200) return;
+              const merged = concatFloat32(pending);
+              pending.length = 0;
+              pendingSamples = 0;
+              void bridge.asrStreamChunk(id, pcm16ToBase64(merged)).catch(() => undefined);
+            }
+          : undefined,
       });
     } catch (err) {
+      streamRef.current = null;
       setRecording(false);
       toast.push({
         tone: "error",
@@ -125,7 +147,20 @@ export function Composer({
     setRecording(false);
     setLevel(0);
     bridge.reportLevel(0);
+    const streamId = streamRef.current;
+    streamRef.current = null;
     try {
+      // 流式：录音只用来关麦克风，文本由服务端已经收着的音频决定
+      if (streamId) {
+        recorder.current.cancel();
+        const { text } = await bridge.asrStreamFinish(streamId);
+        if (!text.trim()) {
+          toast.push({ tone: "info", title: "没听清", detail: "再说一次，或者直接打字。" });
+          return;
+        }
+        onSent();
+        return;
+      }
       const clip = await recorder.current.stop();
       const transcript = await bridge.transcribe(clip.base64, clip.mime);
       if (transcript.error) {
@@ -147,7 +182,10 @@ export function Composer({
   }, [onSent, toast]);
 
   const cancelRecording = useCallback(() => {
+    const streamId = streamRef.current;
+    streamRef.current = null;
     recorder.current.cancel();
+    if (streamId) void bridge.asrStreamCancel(streamId).catch(() => undefined);
     setRecording(false);
     setLevel(0);
     bridge.reportLevel(0);

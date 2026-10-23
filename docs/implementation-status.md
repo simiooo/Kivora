@@ -32,13 +32,13 @@
 | **内置做不了 → 自动转 Pi** | squent 5.2 / CUA | `runner.startTask()`：`autoEscalate` 且装了 Pi 且解析不出文件任务时直接走 Pi 会话，事件里留「转给 Pi」 | flow（接不了的指令走 Pi 失败） |
 | **Pi 凭据桥接** | squent 5.4 | `pi-config.ts` 按 baseUrl 域名把绑定的任务模型映射成 Pi 的 `provider/model`，Key 从 DPAPI 取出来只经环境变量传（`DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`），不落盘 | pi-config.test；手动验证：假 Key 下 Pi 收到 DeepSeek 的 401，说明 provider 与模型名都对 |
 | **语音改配置（§3.11 子集）** | squent 3.11 | 反射路由 `config`：切识别语言（中/英/自动）、语速 ±0.1；热键/目录/Key 仍只走设置页 | router.test |
+| **流式识别（边说边出字）** | voice 2.2 / squent 3.9 | `providers/dashscope-stream.ts`（`AsrStream`：run-task → 推 PCM → `sentence_end` 定稿）；录音每 200ms 推一段；悬浮窗实时显示中间结果。**默认仍是批式**：只有识别模型名以 `-streaming` 结尾才走这条路（模型编辑器预设里有「Qwen 流式识别」），起不来会自动退回批式 | dashscope-stream.test（3 条） |
 
 ## 二、设计有、还没做的（明确缺口）
 
 | 设计项 | 出处 | 现状 | 为什么先不做 / 下一步 |
 |---|---|---|---|
 | **唤醒词"小栗"** | voice 1.2 | 只做 VAD 触发：开口就进，不用叫名字 | 唤醒词要本地小模型（Porcupine 需商业 key；openWakeWord 需 ONNX 运行时 + 训练）。当前选择「VAD 即唤醒」，隐私靠"自己播报时不听 + 30 分钟自动退回"护栏。要上唤醒词就换 `wake.ts` 一个文件 |
-| **ASR partial 预判** | voice 2.2 / squent 3.9 | 录完整段 WAV 再上传，没有流式 partial | 要接 DashScope 实时识别（`realtime-plus` WS + 二进制流 + `result-generated` 的 partial），再在 partial 上做意图预判。属于下一阶段的结构改动 |
 | **A0–A3 响应阶梯 / Cost Router** | voice 0 / 1.2 | 固定单模型栈；ack 固定 400ms 一条 | 属于成本优化，功能上已够用；等接入多模型/多通道再谈 |
 | **6 层上下文栈 + 稳定前缀 ≥80% 命中** | voice 2.3 | brain 只带一句 `describeContext()`；Pi 会话自带上下文 | 影响的是账单不是功能 |
 | **L2/L3 实时通道 ≤3%** | voice 0 | 未接入实时 ASR；TTS 整段合成 | 同上 |
