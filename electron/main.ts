@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut } from "electron";
+﻿import { app, BrowserWindow, globalShortcut } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { IPC } from "../src/shared/ipc.ts";
@@ -198,6 +198,7 @@ async function runShots(): Promise<void> {
     ["/settings/models", "shot-03-models.png"],
     [invoice ? `/history/${invoice.id}` : "/history", "shot-04-history.png"],
     ["/onboarding", "shot-05-onboarding.png"],
+    ["/settings/about", "shot-14-about.png"],
     ["/settings/extensions", "shot-11-extensions.png"],
   ];
   for (const [route, file] of routes) {
