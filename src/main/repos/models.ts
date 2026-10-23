@@ -83,7 +83,19 @@ export function countModels(): number {
   return (db().prepare("SELECT COUNT(*) AS n FROM models").get() as { n: number }).n;
 }
 
+
+function assertProviderFits(provider: ProviderKind, capability: Capability): void {
+  if (provider === "dashscope" && capability === "chat") {
+    throw new AppError("conflict", {
+      message: "DashScope 这个连接只用于语音（识别/合成）；对话请用 OpenAI / Anthropic 兼容端点。",
+    });
+  }
+  if (provider === "anthropic" && capability !== "chat") {
+    throw new AppError("conflict", { message: "Anthropic 只支持对话模型。" });
+  }
+}
 export function createModel(draft: ModelDraft): ModelRecord {
+  assertProviderFits(draft.provider, draft.capability);
   const id = newId("m");
   const now = Date.now();
   tx(() => {
@@ -114,6 +126,7 @@ export function createModel(draft: ModelDraft): ModelRecord {
 }
 
 export function updateModel(draft: ModelDraft & { id: string }): ModelRecord {
+  assertProviderFits(draft.provider, draft.capability);
   const current = getModel(draft.id);
   if (!current) throw new AppError("not_found", { message: "这个模型已经不在了。" });
   const now = Date.now();
@@ -206,7 +219,8 @@ export function bindModel(module: ModuleKey, modelId: string | null): Binding[] 
 
 /* ------------------------------------------------------------ 种子 */
 
-const DASHSCOPE = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+const DASHSCOPE_WS = "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference";
+const QWEN_VOICE = "longanhuan_v3.1";
 
 /**
  * 默认栈：调度/任务用 DeepSeek，识别/合成用 Qwen Audio 3.1。
@@ -215,6 +229,24 @@ const DASHSCOPE = "https://dashscope.aliyuncs.com/compatible-mode/v1";
  * - tts-flash 是低延迟合成，首响优先
  * - filetrans 是长音频文件、realtime-plus 是流式、tts-next 是下一代，留作预设不设默认
  */
+/** 上一版把 Qwen 语音默认成了 HTTP 兼容端点；这里把这两条纠正成 WebSocket。 */
+export function migrateLegacyVoiceSeeds(): number {
+  const rows = db()
+    .prepare(
+      "SELECT id, model_id FROM models WHERE provider = 'openai' AND base_url = 'https://dashscope.aliyuncs.com/compatible-mode/v1' AND model_id LIKE 'qwen-audio-3.1-%'",
+    )
+    .all() as Array<{ id: string; model_id: string }>;
+  if (rows.length === 0) return 0;
+  const now = Date.now();
+  for (const row of rows) {
+    db()
+      .prepare("UPDATE models SET provider = 'dashscope', base_url = ?, test_status = 'untested', tested_at = NULL, test_latency_ms = NULL, updated_at = ? WHERE id = ?")
+      .run(DASHSCOPE_WS, now, row.id);
+  }
+  console.log(`[kivora] migrated ${rows.length} Qwen voice models to WebSocket`);
+  return rows.length;
+}
+
 export function seedModels(): void {
   if (countModels() > 0) return;
   const seeds: Array<Omit<ModelDraft, "apiKey">> = [
@@ -229,20 +261,20 @@ export function seedModels(): void {
     },
     {
       name: "Qwen ASR",
-      provider: "openai",
+      provider: "dashscope",
       capability: "asr",
-      baseUrl: DASHSCOPE,
+      baseUrl: DASHSCOPE_WS,
       modelId: "qwen-audio-3.1-asr-flash-message",
       params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null },
       headers: [],
     },
     {
       name: "Qwen TTS",
-      provider: "openai",
+      provider: "dashscope",
       capability: "tts",
-      baseUrl: DASHSCOPE,
+      baseUrl: DASHSCOPE_WS,
       modelId: "qwen-audio-3.1-tts-flash",
-      params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null, voice: "Cherry", speed: 1 },
+      params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null, voice: QWEN_VOICE, speed: 1 },
       headers: [],
     },
     {
@@ -256,27 +288,27 @@ export function seedModels(): void {
     },
     {
       name: "Qwen 文件转写",
-      provider: "openai",
+      provider: "dashscope",
       capability: "asr",
-      baseUrl: DASHSCOPE,
+      baseUrl: DASHSCOPE_WS,
       modelId: "qwen-audio-3.1-asr-flash-filetrans",
       params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null },
       headers: [],
     },
     {
       name: "Qwen TTS Next",
-      provider: "openai",
+      provider: "dashscope",
       capability: "tts",
-      baseUrl: DASHSCOPE,
+      baseUrl: DASHSCOPE_WS,
       modelId: "qwen-audio-3.1-tts-next",
-      params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null, voice: "Cherry", speed: 1 },
+      params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null, voice: QWEN_VOICE, speed: 1 },
       headers: [],
     },
     {
       name: "Qwen 实时语音",
-      provider: "openai",
+      provider: "dashscope",
       capability: "asr",
-      baseUrl: DASHSCOPE,
+      baseUrl: DASHSCOPE_WS,
       modelId: "qwen-audio-3.1-realtime-plus",
       params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null },
       headers: [],

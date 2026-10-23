@@ -202,7 +202,7 @@ export interface McpProbeResult {
 
 export interface ModelPreset {
   label: string;
-  provider: "openai" | "anthropic" | "custom";
+  provider: "openai" | "anthropic" | "dashscope" | "custom";
   baseUrl: string;
   capability: "chat" | "asr" | "tts";
   modelId: string;

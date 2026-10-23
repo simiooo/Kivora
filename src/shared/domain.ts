@@ -219,7 +219,7 @@ export interface Grant {
 /* -------------------------------------------------------------- 模型 */
 
 export type Capability = "chat" | "asr" | "tts";
-export type ProviderKind = "openai" | "anthropic" | "custom";
+export type ProviderKind = "openai" | "anthropic" | "dashscope" | "custom";
 
 export const CAPABILITY_LABELS: Record<Capability, string> = {
   chat: "对话",
@@ -230,6 +230,7 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
 export const PROVIDER_LABELS: Record<ProviderKind, string> = {
   openai: "OpenAI 兼容",
   anthropic: "Anthropic 兼容",
+  dashscope: "DashScope WebSocket",
   custom: "自建",
 };
 

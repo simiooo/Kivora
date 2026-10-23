@@ -2,6 +2,7 @@ import type { ModelRecord } from "../../shared/domain.ts";
 import { AppError } from "../../shared/errors.ts";
 import { authHeaders, joinUrl } from "./llm.ts";
 import { request } from "./http.ts";
+import { encodeWav } from "../../shared/wav.ts";
 
 export interface TranscriptionResult {
   text: string;
@@ -79,37 +80,8 @@ export async function synthesize(
 
 /* ------------------------------------------------------------ 音频工具 */
 
-/** 16kHz 单声道 16bit PCM WAV */
-export function pcmToWav(samples: Float32Array, sampleRate = 16_000): Uint8Array {
-  const dataSize = samples.length * 2;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-  const writeString = (offset: number, value: string): void => {
-    for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
-  };
-  writeString(0, "RIFF");
-  view.setUint32(4, 36 + dataSize, true);
-  writeString(8, "WAVE");
-  writeString(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeString(36, "data");
-  view.setUint32(40, dataSize, true);
-  for (let i = 0; i < samples.length; i++) {
-    const clamped = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(44 + i * 2, Math.round(clamped * 0x7fff), true);
-  }
-  return new Uint8Array(buffer);
-}
-
-/** 0.4s 静音，用来做一次真实但几乎零成本的 ASR 探测 */
 export function silentWav(seconds = 0.4): Uint8Array {
-  return pcmToWav(new Float32Array(Math.round(16_000 * seconds)));
+  return encodeWav(new Float32Array(Math.round(16_000 * seconds)), 16_000);
 }
 
 /** mock 模式下的提示音：两声短促的轻响，比"假装有人说话"诚实 */
@@ -125,5 +97,5 @@ export function mockTone(): Uint8Array {
     const second = t > 0.15 && t < 0.3 ? Math.sin(2 * Math.PI * 880 * (t - 0.15)) * 0.16 : 0;
     samples[i] = (first + second) * Math.max(0, envelope);
   }
-  return pcmToWav(samples, sampleRate);
+  return encodeWav(samples, sampleRate);
 }

@@ -152,7 +152,7 @@ function ConnectStep({
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [voiceOn, setVoiceOn] = useState(true);
-  const [voiceBase, setVoiceBase] = useState("https://dashscope.aliyuncs.com/compatible-mode/v1");
+  const [voiceBase, setVoiceBase] = useState("wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference");
   const [voiceKey, setVoiceKey] = useState("");
   const [asrId, setAsrId] = useState("qwen-audio-3.1-asr-flash-message");
   const [ttsId, setTtsId] = useState("qwen-audio-3.1-tts-flash");

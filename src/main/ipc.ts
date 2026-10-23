@@ -72,12 +72,19 @@ const httpUrl = z
   .max(400)
   .refine((value) => /^https?:\/\/[^\s]+$/i.test(value), "Base URL 要以 http:// 或 https:// 开头");
 
+const modelUrl = z
+  .string()
+  .trim()
+  .min(1)
+  .max(400)
+  .refine((value) => /^(https?|wss?):\/\/[^\s]+$/i.test(value), "地址要以 http(s):// 或 ws(s):// 开头");
+
 const modelDraftSchema = z.object({
   id: modelId.optional(),
   name: z.string().trim().min(1).max(60),
-  provider: z.enum(["openai", "anthropic", "custom"]),
+  provider: z.enum(["openai", "anthropic", "dashscope", "custom"]),
   capability: z.enum(["chat", "asr", "tts"]),
-  baseUrl: httpUrl,
+  baseUrl: modelUrl,
   modelId: z.string().trim().min(1).max(160),
   params: paramsSchema,
   headers: z.array(headerPair).max(12),
@@ -483,36 +490,36 @@ const PRESETS: ModelPreset[] = [
   // 语音：Qwen Audio 3.1 系列（阿里百炼 OpenAI 兼容端点）
   {
     label: "Qwen ASR（短音频）",
-    provider: "openai",
-    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    provider: "dashscope",
+    baseUrl: "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference",
     capability: "asr",
     modelId: "qwen-audio-3.1-asr-flash-message",
   },
   {
     label: "Qwen ASR（长文件）",
-    provider: "openai",
-    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    provider: "dashscope",
+    baseUrl: "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference",
     capability: "asr",
     modelId: "qwen-audio-3.1-asr-flash-filetrans",
   },
   {
     label: "Qwen TTS（低延迟）",
-    provider: "openai",
-    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    provider: "dashscope",
+    baseUrl: "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference",
     capability: "tts",
     modelId: "qwen-audio-3.1-tts-flash",
   },
   {
     label: "Qwen TTS Next",
-    provider: "openai",
-    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    provider: "dashscope",
+    baseUrl: "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference",
     capability: "tts",
     modelId: "qwen-audio-3.1-tts-next",
   },
   {
     label: "Qwen 实时语音",
-    provider: "openai",
-    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    provider: "dashscope",
+    baseUrl: "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference",
     capability: "asr",
     modelId: "qwen-audio-3.1-realtime-plus",
   },

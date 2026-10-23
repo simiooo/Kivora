@@ -89,7 +89,7 @@ pnpm shots      # 七个界面全截图到 artifacts/
 │  store.ts          node:sqlite + WAL + 迁移（失败拒绝启动）       │
 │  repos/*           会话 / 事件 / 队列 / 审批 / 模型 / 配置        │
 │  providers/http.ts 超时、指数退避、熔断、错误归一化               │
-│  providers/*       OpenAI 兼容的 chat / ASR / TTS（含 Anthropic） │
+│  providers/*       OpenAI 兼容 chat/ASR/TTS、Anthropic、DashScope WS 语音 │
 │  voice.ts          转写与合成（mock 可切、合成缓存）              │
 │  dispatcher/       反射路由 → brain → 会话/队列/审批              │
 │  tasks/files.ts    真正能执行的那条路 + 硬边界                    │
@@ -113,7 +113,7 @@ pnpm shots      # 七个界面全截图到 artifacts/
 Windows 凭据管理器（DPAPI）        # API Key，只存密文
 ```
 
-事件与审计按设置里的天数清理（默认 7 天），消息不自动删。\n\n默认模型栈：调度/任务 `deepseek-chat`（`https://api.deepseek.com/v1`），识别 `qwen-audio-3.1-asr-flash-message`、合成 `qwen-audio-3.1-tts-flash`（默认 Base URL 指向一家 OpenAI 兼容的音频端点，换厂商只改 Base URL/Key/模型 ID）。语音型号在设置 → 模型里可以换，长文件转写用 `...-filetrans`、下一代合成用 `...-tts-next`、流式用 `...-realtime-plus`。
+事件与审计按设置里的天数清理（默认 7 天），消息不自动删。\n\n默认模型栈：调度/任务 `deepseek-chat`（`https://api.deepseek.com/v1`），识别 `qwen-audio-3.1-asr-flash-message`、合成 `qwen-audio-3.1-tts-flash`（默认 Base URL 指向一家 OpenAI 兼容的音频端点，换厂商只改 Base URL/Key/模型 ID）。语音这两条走 **WebSocket**（DashScope 协议：`run-task` → 二进制/`continue-task` → `finish-task`，事件 `task-started/result-generated/task-finished/task-failed`），不是 OpenAI 的 `/audio/*` HTTP 接口；录音直接采 16k 单声道 WAV 再发过去。长文件转写用 `...-filetrans`、下一代合成用 `...-tts-next`、流式用 `...-realtime-plus`。
 
 ## 已知边界（说清楚，不假装）
 

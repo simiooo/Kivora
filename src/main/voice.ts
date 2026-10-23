@@ -4,6 +4,7 @@ import { getConfig } from "./repos/config.ts";
 import { getBoundModel } from "./repos/models.ts";
 import { getSecret, modelSecretName } from "./secrets.ts";
 import { mockTone, synthesize, transcribe } from "./providers/audio.ts";
+import { synthesizeViaWebSocket, transcribeViaWebSocket } from "./providers/dashscope-ws.ts";
 
 /** D1 的 mock 转写：轮着来，覆盖三条黄金路径 + 状态查询 + 审批回答 */
 export const MOCK_UTTERANCES = [
@@ -65,7 +66,24 @@ export async function transcribeAudio(audio: Uint8Array, mime: string): Promise<
 
   try {
     const apiKey = getSecret(modelSecretName(model.id));
-    const result = await transcribe(model, apiKey, audio, mime, config.asrLanguage);
+    const sampleRate = (() => {
+      try {
+        return new DataView(audio.buffer, audio.byteOffset, audio.byteLength).getUint32(24, true) || 16_000;
+      } catch {
+        return 16_000;
+      }
+    })();
+    const result =
+      model.provider === "dashscope"
+        ? await transcribeViaWebSocket({
+            url: model.baseUrl,
+            apiKey: apiKey ?? "",
+            model: model.modelId,
+            audio,
+            sampleRate,
+            format: mime.includes("wav") ? "wav" : "mp3",
+          })
+        : await transcribe(model, apiKey, audio, mime, config.asrLanguage);
     return {
       text: result.text,
       confidence: null,
@@ -135,7 +153,16 @@ export async function synthesizeSpeech(text: string): Promise<SpeechClip> {
 
   try {
     const apiKey = getSecret(modelSecretName(model.id));
-    const result = await synthesize(model, apiKey, trimmed);
+    const result =
+      model.provider === "dashscope"
+        ? await synthesizeViaWebSocket({
+            url: model.baseUrl,
+            apiKey: apiKey ?? "",
+            model: model.modelId,
+            text: trimmed,
+            voice: model.params.voice,
+          })
+        : await synthesize(model, apiKey, trimmed);
     const base64 = toBase64(result.audio);
     if (speechCache.size >= SPEECH_CACHE_LIMIT) {
       const oldest = speechCache.keys().next().value;

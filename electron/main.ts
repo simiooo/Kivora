@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { IPC } from "../src/shared/ipc.ts";
 import { closeStore, openStore, pruneOldData, recoverOrphanSessions } from "../src/main/store.ts";
-import { seedModels } from "../src/main/repos/models.ts";
+import { migrateLegacyVoiceSeeds, seedModels } from "../src/main/repos/models.ts";
 import { initSecrets } from "../src/main/secrets.ts";
 import { getConfig, setConfig } from "../src/main/repos/config.ts";
 import { initPi } from "../src/main/env.ts";
@@ -299,6 +299,7 @@ app.whenReady().then(async () => {
   const recovered = recoverOrphanSessions();
   if (recovered) console.warn(`[kivora] marked ${recovered} orphaned sessions as failed`);
   seedModels();
+  migrateLegacyVoiceSeeds();
   pruneOldData(getConfig().retentionDays);
 
   if (countSessions() === 0 && !isSmoke) {

@@ -85,8 +85,8 @@ export function ModelEditor({
       setError("给它起个名字。");
       return null;
     }
-    if (!/^https?:\/\/[^\s]+$/i.test(state.baseUrl.trim())) {
-      setError("Base URL 要以 http:// 或 https:// 开头。");
+    if (!/^(https?|wss?):\/\/[^\s]+$/i.test(state.baseUrl.trim())) {
+      setError("地址要以 http:// / https:// / wss:// 开头。");
       return null;
     }
     if (!state.modelId.trim()) {
@@ -259,9 +259,15 @@ export function ModelEditor({
         <Field label="提供方">
           <Select
             value={state.provider}
-            onChange={(value) => update({ provider: value as ProviderKind })}
+            onChange={(value) =>
+              update({
+                provider: value as ProviderKind,
+                ...(value === "dashscope" && state.capability === "chat" ? { capability: "asr" as const } : {}),
+              })
+            }
             options={[
               { value: "openai", label: "OpenAI 兼容" },
+              { value: "dashscope", label: "DashScope WebSocket（语音）" },
               { value: "anthropic", label: "Anthropic 兼容" },
               { value: "custom", label: "自建 / 本地" },
             ]}
@@ -272,7 +278,7 @@ export function ModelEditor({
             value={state.capability}
             onChange={(value) => update({ capability: value as Capability })}
             options={[
-              { value: "chat", label: "对话" },
+              ...(state.provider === "dashscope" ? [] : [{ value: "chat", label: "对话" }]),
               { value: "asr", label: "语音识别" },
               { value: "tts", label: "语音合成" },
             ]}
