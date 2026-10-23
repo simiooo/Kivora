@@ -20,7 +20,7 @@ import { cancelRun, isRunning, pickScenario, startTask } from "./runner.ts";
 import { cancelPiRun, isPiRunning, steerPiRun } from "./pi-runner.ts";
 import { mockMode, piAvailable } from "../env.ts";
 import { beginTurn, isCurrentTurn, setThinking } from "../turn-state.ts";
-import { acknowledgmentFor, isQuestion, looksActionable } from "./ack.ts";
+import { acknowledgmentFor, isQuestion, looksActionable, stripWakeName } from "./ack.ts";
 import { setConfig } from "../repos/config.ts";
 import { broadcast, speak } from "../bus.ts";
 import { getConfig } from "../repos/config.ts";
@@ -152,7 +152,8 @@ export async function handleUtterance(
   text: string,
   options: { source?: "voice" | "text"; confidence?: number | null } = {},
 ): Promise<TurnResult> {
-  const raw = text.trim();
+  // 叫了名字也不影响指令本身（还没有唤醒词门，先去称呼）
+  const raw = stripWakeName(text.trim());
   const turn = collect();
   if (!raw) {
     return { messages: [], action: { kind: "none" }, spoken: null };

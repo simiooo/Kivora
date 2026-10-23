@@ -36,6 +36,14 @@ export function looksActionable(text: string): boolean {
   return ACTION.test(text.trim());
 }
 
+/**
+ * 去掉称呼。现在还没有唤醒词门（见 docs/implementation-status.md），
+ * 但用户多半会习惯性叫名字；叫了就别把"小栗"也算进指令里。
+ */
+export function stripWakeName(text: string): string {
+  return text.replace(/^\s*(小栗|hey\s*kivora|kivora)[\s,，。:：!！]*/i, "").trim() || text.trim();
+}
+
 let cursor = 0;
 
 /** 轮着用几种说法，避免每次都一模一样；短语固定，TTS 缓存能复用 */

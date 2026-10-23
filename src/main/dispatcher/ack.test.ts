@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { ackKindOf, acknowledgmentFor, isQuestion, looksActionable, resetAckCursor } from "./ack.ts";
+import { ackKindOf, acknowledgmentFor, isQuestion, looksActionable, resetAckCursor, stripWakeName } from "./ack.ts";
 
 beforeEach(() => resetAckCursor());
 
@@ -52,5 +52,21 @@ describe("接话短语", () => {
     for (const text of ["整理发票", "做完了吗", "嗯"]) {
       expect(acknowledgmentFor(text).length).toBeLessThanOrEqual(10);
     }
+  });
+});
+
+describe("叫名字", () => {
+  it("开头的称呼会被去掉，指令本身不变", () => {
+    expect(stripWakeName("小栗，今天星期几？")).toBe("今天星期几？");
+    expect(stripWakeName("小栗 把发票挪过去")).toBe("把发票挪过去");
+    expect(stripWakeName("Kivora: 停")).toBe("停");
+  });
+
+  it("没叫名字就原样返回", () => {
+    expect(stripWakeName("把发票挪过去")).toBe("把发票挪过去");
+  });
+
+  it("整句只有称呼时退回原文，别变成空指令", () => {
+    expect(stripWakeName("小栗")).toBe("小栗");
   });
 });
