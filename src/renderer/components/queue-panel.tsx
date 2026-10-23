@@ -3,6 +3,7 @@ import type { QueueItem, Session } from "@shared/domain.ts";
 import { tailEllipsis } from "@shared/text.ts";
 import { Button, Chip, IconButton, Spinner } from "./ui.tsx";
 import { cn } from "../lib/utils.ts";
+import { usePresence } from "../lib/presence.ts";
 
 /** 画板 07：插话 / 排队 / 执行中三态，可提前或取消 */
 export function QueuePanel({
@@ -22,11 +23,17 @@ export function QueuePanel({
   onClearAll: () => void;
   onClose: () => void;
 }): React.JSX.Element | null {
-  if (!open) return null;
+  const { mounted, closing } = usePresence(open);
+  if (!mounted) return null;
   const total = items.length + (running ? 1 : 0);
 
   return (
-    <div className="fixed right-6 bottom-[132px] z-40 w-[440px] max-w-[calc(100vw-32px)] rounded-[18px] border border-border bg-card p-4 shadow-float">
+    <div
+      className={cn(
+        "fixed right-6 bottom-[132px] z-40 w-[440px] max-w-[calc(100vw-32px)] rounded-[18px] border border-border bg-card p-4 shadow-float",
+        closing ? "motion-exit-pop" : "motion-pop",
+      )}
+    >
       <div className="mb-3 flex items-center">
         <h3 className="text-[15px] font-medium">待处理 {total}</h3>
         <div className="ml-auto flex items-center gap-2">

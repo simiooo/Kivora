@@ -27,6 +27,59 @@ function rendererFile(name: string): string {
   return path.join(__dirname, "..", "dist", name);
 }
 
+/**
+ * 主窗的入场/离场：Electron 没有窗口级动画，用 setOpacity 做 120–160ms 淡入淡出。
+ * 透明窗口（悬浮/权限）不走这里，它们在渲染层用 CSS 动画。
+ */
+function fadeOpacity(win: BrowserWindow, from: number, to: number, ms = 150): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      win.setOpacity(from);
+    } catch {
+      resolve();
+      return;
+    }
+    const steps = Math.max(1, Math.round(ms / 16));
+    let step = 0;
+    const timer = setInterval(() => {
+      step += 1;
+      const value = from + ((to - from) * step) / steps;
+      try {
+        win.setOpacity(Math.min(1, Math.max(0, value)));
+      } catch {
+        // 窗口已经没了
+      }
+      if (step >= steps) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, 16);
+  });
+}
+
+function showWithFade(win: BrowserWindow): void {
+  try {
+    win.setOpacity(0);
+  } catch {
+    // 有些环境不支持透明度，直接显示
+  }
+  win.show();
+  win.focus();
+  void fadeOpacity(win, 0, 1, 160);
+}
+
+function hideWithFade(win: BrowserWindow): void {
+  if (!win.isVisible()) return;
+  void fadeOpacity(win, win.getOpacity(), 0, 120).then(() => {
+    win.hide();
+    try {
+      win.setOpacity(1);
+    } catch {
+      // ignore
+    }
+  });
+}
+
 function load(win: BrowserWindow, html: string, route = ""): void {
   if (devServerUrl) {
     const url = new URL(html, devServerUrl);
@@ -70,12 +123,14 @@ export function createMainWindow(): BrowserWindow {
     },
   });
 
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.once("ready-to-show", () => {
+    if (mainWindow) showWithFade(mainWindow);
+  });
   mainWindow.on("close", (event) => {
     // 关主窗 = 收进托盘，而不是退出；真的退出走托盘菜单或 app.quit()
     if (!quitting && getConfig().closeToTray) {
       event.preventDefault();
-      mainWindow?.hide();
+      if (mainWindow) hideWithFade(mainWindow);
     }
   });
   mainWindow.on("closed", () => {
@@ -194,7 +249,14 @@ export function refreshPermissionWindow(): void {
   const config = getConfig();
   const pending = pendingApprovals();
   if (!config.permissionWindow || pending.length === 0) {
-    if (permissionWindow && !permissionWindow.isDestroyed()) permissionWindow.hide();
+    if (permissionWindow && !permissionWindow.isDestroyed()) {
+      // 留 220ms 给渲染层的退场动画；期间如果又来一条新审批就不藏了
+      setTimeout(() => {
+        if (pendingApprovals().length === 0 && permissionWindow && !permissionWindow.isDestroyed()) {
+          permissionWindow.hide();
+        }
+      }, 220);
+    }
     return;
   }
   const win = ensurePermission();
@@ -205,7 +267,7 @@ export function refreshPermissionWindow(): void {
 export function focusMain(): void {
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createMainWindow();
   if (win.isMinimized()) win.restore();
-  win.show();
+  if (!win.isVisible()) showWithFade(win);
   win.focus();
 }
 

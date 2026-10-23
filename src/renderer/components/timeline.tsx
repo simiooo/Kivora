@@ -68,7 +68,7 @@ export function MessageRow({
   const lowConfidence = message.confidence !== null && message.confidence < 0.7;
 
   return (
-    <article className="py-3">
+    <article className="py-3 motion-rise">
       <div className="mb-1 flex items-baseline gap-2">
         <span className={cn("text-[12px] font-medium", isUser ? "text-faint" : "text-acorn")}>
           {isUser ? "你" : isSystem ? "系统" : "Kivora"}
@@ -129,7 +129,7 @@ export function ApprovalCard({
   return (
     <section
       id={`approval-${approval.id}`}
-      className="mt-3 max-w-[680px] rounded-[18px] border border-border bg-sunken px-5 py-4"
+      className="motion-pop mt-3 max-w-[680px] rounded-[18px] border border-border bg-sunken px-5 py-4"
     >
       <div className="flex items-center gap-2">
         <span className="text-[12px] text-faint">{approval.risk === "G3" ? "需要你手动确认" : "需要确认"}</span>
@@ -233,7 +233,7 @@ export function TaskStrip({
   const failed = session.state === "failed" || session.state === "aborted";
   const tone = failed ? "danger" : session.state === "done" ? "positive" : "acorn";
   return (
-    <div className="border-t border-border/50 py-2.5 first:border-t-0">
+    <div className="motion-fade border-t border-border/50 py-2.5 first:border-t-0">
       <div className="flex items-center gap-2.5">
         <Dot tone={tone} pulse={session.state === "running" || session.state === "starting"} />
         <span className="font-mono text-[11px] text-faint/80">{session.id.slice(0, 4)}</span>

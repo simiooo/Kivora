@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactNode } from "react";
 import { AlertTriangle, Check, Info, Loader2, X } from "lucide-react";
 import { cn } from "../lib/utils.ts";
+import { usePresence } from "../lib/presence.ts";
 
 /* ------------------------------------------------------------ 按钮 */
 
@@ -274,16 +275,26 @@ const ToastContext = createContext<ToastContextValue>({ push: () => undefined })
 
 export function ToastProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [leaving, setLeaving] = useState<number[]>([]);
   const seq = useRef(0);
 
-  const push = useCallback((toast: Omit<Toast, "id">) => {
-    seq.current += 1;
-    const id = seq.current;
-    setToasts((prev) => [...prev.slice(-2), { ...toast, id }]);
+  const dismiss = useCallback((id: number) => {
+    setLeaving((prev) => (prev.includes(id) ? prev : [...prev, id]));
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((item) => item.id !== id));
-    }, toast.tone === "error" ? 6000 : 3200);
+      setLeaving((prev) => prev.filter((item) => item !== id));
+    }, 140);
   }, []);
+
+  const push = useCallback(
+    (toast: Omit<Toast, "id">) => {
+      seq.current += 1;
+      const id = seq.current;
+      setToasts((prev) => [...prev.slice(-2), { ...toast, id }]);
+      window.setTimeout(() => dismiss(id), toast.tone === "error" ? 6000 : 3200);
+    },
+    [dismiss],
+  );
 
   return (
     <ToastContext.Provider value={{ push }}>
@@ -292,7 +303,10 @@ export function ToastProvider({ children }: { children: ReactNode }): React.JSX.
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className="pointer-events-auto flex w-[420px] max-w-[calc(100vw-48px)] items-start gap-3 rounded-[14px] border border-border bg-card px-4 py-3 shadow-float"
+            className={cn(
+              "pointer-events-auto flex w-[420px] max-w-[calc(100vw-48px)] items-start gap-3 rounded-[14px] border border-border bg-card px-4 py-3 shadow-float",
+              leaving.includes(toast.id) ? "motion-exit-pop" : "motion-pop",
+            )}
           >
             <span className="mt-0.5">
               {toast.tone === "error" ? (
@@ -341,6 +355,7 @@ export function Sheet({
   width?: number;
   children: ReactNode;
 }): React.JSX.Element | null {
+  const { mounted, closing } = usePresence(open);
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent): void => {
@@ -350,12 +365,21 @@ export function Sheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!mounted) return null;
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onMouseDown={onClose}>
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex justify-end bg-black/40",
+        closing ? "motion-exit-fade" : "motion-fade",
+      )}
+      onMouseDown={closing ? undefined : onClose}
+    >
       <section
         style={{ width }}
-        className="flex h-full max-w-[92vw] flex-col rounded-l-[22px] bg-card shadow-dialog"
+        className={cn(
+          "flex h-full max-w-[92vw] flex-col rounded-l-[22px] bg-card shadow-dialog",
+          closing ? "motion-exit-sheet" : "motion-sheet",
+        )}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="flex shrink-0 items-start gap-4 px-6 pt-5 pb-3">

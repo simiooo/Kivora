@@ -23,7 +23,7 @@ import {
 } from "../src/main/windows.ts";
 import { markListening, normalizeAccelerator, registerIpc } from "../src/main/ipc.ts";
 import { setBroadcastHook } from "../src/main/bus.ts";
-import { expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
+import { answerById, expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
 import { stopAllPiRuns } from "../src/main/dispatcher/pi-runner.ts";
 import { appendMessage, countSessions, listActiveSessions, listSessions } from "../src/main/repos/sessions.ts";
 import { pendingApprovals } from "../src/main/repos/approvals.ts";
@@ -94,6 +94,53 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function probeMotion(
+  win: BrowserWindow | null,
+  timeoutMs = 1200,
+): Promise<{ opacity: string; transform: string } | null> {
+  if (!win || win.isDestroyed()) return null;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const snapshot = (await win.webContents.executeJavaScript(
+        `(() => { const el = document.querySelector("#root > div"); if (!el) return null; const s = getComputedStyle(el); return { opacity: s.opacity, transform: s.transform }; })()`,
+      )) as { opacity: string; transform: string } | null;
+      if (snapshot) return snapshot;
+    } catch {
+      return null;
+    }
+    await wait(16);
+  }
+  return null;
+}
+
+/** 退场采样：轮询 400ms，记录过渡期间出现过的最低不透明度 */
+async function probeExit(
+  win: BrowserWindow | null,
+  timeoutMs = 420,
+  selector = "#root > div",
+): Promise<{ minOpacity: number; frames: number } | null> {
+  if (!win || win.isDestroyed()) return null;
+  let minOpacity = 1;
+  let frames = 0;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const snapshot = (await win.webContents.executeJavaScript(
+        `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return null; return { opacity: Number(getComputedStyle(el).opacity) }; })()`,
+      )) as { opacity: number } | null;
+      if (snapshot) {
+        frames += 1;
+        minOpacity = Math.min(minOpacity, snapshot.opacity);
+      }
+    } catch {
+      break;
+    }
+    await wait(16);
+  }
+  return { minOpacity: Number(minOpacity.toFixed(2)), frames };
+}
+
 async function capture(win: BrowserWindow | null, file: string): Promise<void> {
   if (!win || win.isDestroyed()) {
     console.warn(`[kivora] shot skipped ${file}: no window`);
@@ -149,9 +196,19 @@ async function runShots(): Promise<void> {
     await capture(win, file);
   }
 
-  // 回到时间线，再开浮窗与审批窗
+  // 阅读器的退场：点开再关，采样过渡期间的不透明度
   await loadRoute(win, "");
   await wait(600);
+  const readerOpened = await win.webContents.executeJavaScript(
+    `(() => { const b = [...document.querySelectorAll("button")].find((x) => x.textContent && x.textContent.includes("展开全文")); if (b) { b.click(); return true; } return false; })()`,
+  );
+  await wait(320);
+  const readerClosed = await win.webContents.executeJavaScript(
+    `(() => { const b = [...document.querySelectorAll("button")].find((x) => x.textContent && x.textContent.trim() === "关闭"); if (b) { b.click(); return true; } return false; })()`,
+  );
+  const readerExit = await probeExit(win, 420, "[data-reader]");
+  console.log(`[kivora] motion reader exit=${JSON.stringify({ readerOpened, readerClosed, ...readerExit })}`);
+  await wait(220);
 
   // 长文阅读器（点「展开全文」，画板 14）
   await win.webContents.executeJavaScript(
@@ -184,13 +241,31 @@ async function runShots(): Promise<void> {
   await wait(600);
   markListening(true);
   showOverlay();
-  await wait(900);
+  await wait(50);
+  const overlayEarly = await probeMotion(getOverlayWindow());
+  await wait(360);
+  const overlayLate = await probeMotion(getOverlayWindow());
+  console.log(`[kivora] motion overlay early=${JSON.stringify(overlayEarly)} late=${JSON.stringify(overlayLate)}`);
   await capture(getOverlayWindow(), "shot-06-overlay.png");
   markListening(false);
+  const overlayExit = await probeExit(getOverlayWindow());
+  console.log(`[kivora] motion overlay exit=${JSON.stringify(overlayExit)}`);
+  await wait(120);
 
   refreshPermissionWindow();
-  await wait(900);
+  await wait(50);
+  const permissionEarly = await probeMotion(getPermissionWindow());
+  await wait(360);
+  const permissionLate = await probeMotion(getPermissionWindow());
+  console.log(`[kivora] motion permission early=${JSON.stringify(permissionEarly)} late=${JSON.stringify(permissionLate)}`);
   await capture(getPermissionWindow(), "shot-07-permission.png");
+  // 退场：把演示审批拒掉，权限窗应该淡出再隐藏
+  const demoApproval = pendingApprovals()[0];
+  if (demoApproval) {
+    answerById(demoApproval.id, "deny");
+    const permissionExit = await probeExit(getPermissionWindow());
+    console.log(`[kivora] motion permission exit=${JSON.stringify(permissionExit)}`);
+  }
 
   if (isSmoke) app.quit();
 }

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import type { Approval, ApprovalResolution } from "@shared/domain.ts";
 import { displayPath } from "@shared/text.ts";
 import { bridge, toUiError } from "../lib/bridge.ts";
 import { cn } from "../lib/utils.ts";
+import { usePresence } from "../lib/presence.ts";
 
 void (async (): Promise<void> => {
   document.documentElement.classList.add("overlay-window");
@@ -51,23 +52,32 @@ export function PermissionApp(): React.JSX.Element | null {
     }
   };
 
-  if (!approval) return null;
+  const { mounted, closing } = usePresence(Boolean(approval));
 
-  const remaining = approval.expiresAt ? Math.max(0, Math.ceil((approval.expiresAt - now) / 1000)) : null;
-  const total = approval.expiresAt ? approval.expiresAt - approval.createdAt : null;
-  const ratio = total && approval.expiresAt ? Math.max(0, Math.min(1, (approval.expiresAt - now) / total)) : null;
-  const shown = approval.detail.slice(0, 3);
-  const hidden = approval.detail.length - shown.length;
+  // 退场时 approval 已经变空，但动画还要用上一张卡的内容
+  const lastApproval = useRef<Approval | null>(null);
+  if (approval) lastApproval.current = approval;
+  const card = approval ?? lastApproval.current;
+  if (!card || !mounted) return null;
+
+  const remaining = card.expiresAt ? Math.max(0, Math.ceil((card.expiresAt - now) / 1000)) : null;
+  const total = card.expiresAt ? card.expiresAt - card.createdAt : null;
+  const ratio = total && card.expiresAt ? Math.max(0, Math.min(1, (card.expiresAt - now) / total)) : null;
+  const shown = card.detail.slice(0, 3);
+  const hidden = card.detail.length - shown.length;
 
   return (
-    <div className="p-3">
-      <section className="flex flex-col rounded-[20px] border border-white/6 bg-card p-5 shadow-float">
+    <div className={cn("p-3", closing ? "motion-exit-pop" : "motion-pop")}>
+      <section
+        key={card.id}
+        className={cn("motion-fade flex flex-col rounded-[20px] border border-white/6 bg-card p-5 shadow-float")}
+      >
         <div className="flex items-center gap-2">
           <span className="size-1.5 rounded-full bg-acorn" />
           <span className="text-[12px] text-faint">
-            {approval.risk === "G3" ? "需要你手动确认" : "需要确认"}
+            {card.risk === "G3" ? "需要你手动确认" : "需要确认"}
           </span>
-          {approval.risk === "G3" ? (
+          {card.risk === "G3" ? (
             <span className="flex items-center gap-1 rounded-full bg-destructive-container px-2 py-0.5 text-[11px] text-destructive">
               <ShieldAlert className="size-3" /> 高危
             </span>
@@ -86,9 +96,9 @@ export function PermissionApp(): React.JSX.Element | null {
           </div>
         ) : null}
 
-        <h2 className="mt-3 text-[18px] font-medium leading-7">{approval.title}</h2>
-        {approval.sessionTitle ? (
-          <p className="mt-0.5 text-[12px] text-faint">来自「{approval.sessionTitle}」</p>
+        <h2 className="mt-3 text-[18px] font-medium leading-7">{card.title}</h2>
+        {card.sessionTitle ? (
+          <p className="mt-0.5 text-[12px] text-faint">来自「{card.sessionTitle}」</p>
         ) : null}
 
         <div className="mt-2 max-h-[110px] overflow-y-auto text-[12px] leading-6 text-muted-foreground">
@@ -97,7 +107,7 @@ export function PermissionApp(): React.JSX.Element | null {
               {displayPath(item, 52)}
             </div>
           ))}
-          {hidden > 0 ? <div className="text-acorn">还有 {hidden} 项（共 {approval.detail.length} 项）</div> : null}
+          {hidden > 0 ? <div className="text-acorn">还有 {hidden} 项（共 {card.detail.length} 项）</div> : null}
         </div>
 
         {error ? <p className="mt-2 text-[11px] text-destructive">{error}</p> : null}
@@ -111,7 +121,7 @@ export function PermissionApp(): React.JSX.Element | null {
           >
             允许一次
           </button>
-          {approval.options.includes("allow_scope") ? (
+          {card.options.includes("allow_scope") ? (
             <button
               type="button"
               disabled={busy}

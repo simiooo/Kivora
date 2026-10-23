@@ -21,6 +21,8 @@ export default function App(): React.JSX.Element {
     });
   }, []);
 
+  const section = route.split("/")[1] || "timeline";
+
   if (!data) {
     return (
       <div className="grid h-full place-items-center bg-background">
@@ -59,5 +61,11 @@ export default function App(): React.JSX.Element {
     return <TimelinePage bootstrap={data} navigate={navigate} />;
   })();
 
-  return <ToastProvider>{content}</ToastProvider>;
+  return (
+    <ToastProvider>
+      <div key={section} className="motion-fade h-full">
+        {content}
+      </div>
+    </ToastProvider>
+  );
 }

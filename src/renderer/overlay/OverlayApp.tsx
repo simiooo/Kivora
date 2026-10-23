@@ -5,6 +5,7 @@ import { STATE_LABELS } from "@shared/domain.ts";
 import { formatHotkey, formatRelative, tailEllipsis } from "@shared/text.ts";
 import { bridge } from "../lib/bridge.ts";
 import { cn } from "../lib/utils.ts";
+import { usePresence } from "../lib/presence.ts";
 
 void (async (): Promise<void> => {
   document.documentElement.classList.add("overlay-window");
@@ -12,7 +13,6 @@ void (async (): Promise<void> => {
 
 export function OverlayApp(): React.JSX.Element | null {
   const [state, setState] = useState<OverlayState | null>(null);
-  const [visible, setVisible] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -31,16 +31,25 @@ export function OverlayApp(): React.JSX.Element | null {
 
   const pending = state?.pendingApproval ?? null;
   const active = Boolean(state?.listening || pending || (state?.queuedCount ?? 0) > 0 || state?.foreground);
+  const capsule = usePresence(Boolean(state?.listening), 140);
+  const [closing, setClosing] = useState(false);
 
+  // 没东西可显示时：先播退场，再让主进程把窗口收起来
   useEffect(() => {
     if (!state) return;
-    if (!active) {
-      setVisible(false);
-      void bridge.overlayHide();
-    } else {
-      setVisible(true);
+    if (active) {
+      setClosing(false);
+      return;
     }
-  }, [active, state]);
+    setClosing(true);
+    const timer = window.setTimeout(() => {
+      setClosing(false);
+      void bridge.overlayHide();
+    }, 150);
+    return () => window.clearTimeout(timer);
+    // 只在"有没有东西要显示"变化时切换，不跟着每次状态刷新重播
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -50,12 +59,22 @@ export function OverlayApp(): React.JSX.Element | null {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!state || !visible) return null;
+  if (!state || (!active && !closing)) return null;
 
   return (
-    <div className="flex h-full flex-col justify-end gap-3 p-3">
-      {state.listening ? (
-        <div className="flex h-14 shrink-0 items-center gap-3 rounded-full bg-[#1b1d1a] px-5 shadow-float">
+    <div
+      className={cn(
+        "flex h-full flex-col justify-end gap-3 p-3",
+        closing ? "motion-exit-pop" : "motion-pop",
+      )}
+    >
+      {capsule.mounted ? (
+        <div
+          className={cn(
+            "flex h-14 shrink-0 items-center gap-3 rounded-full bg-[#1b1d1a] px-5 shadow-float",
+            capsule.closing ? "motion-exit-capsule" : "motion-capsule",
+          )}
+        >
           <span className="size-2 rounded-full bg-acorn" />
           <span className="text-[17px] font-medium text-foreground">在听</span>
           <div className="flex items-end gap-[3px]">
@@ -73,7 +92,12 @@ export function OverlayApp(): React.JSX.Element | null {
         </div>
       ) : null}
 
-      <div className="shrink-0 rounded-[18px] border border-white/5 bg-card p-5 shadow-float">
+      <div
+        className={cn(
+          "shrink-0 rounded-[18px] border border-white/5 bg-card p-5 shadow-float",
+          capsule.mounted ? "motion-rise" : "",
+        )}
+      >
         <div className="mb-3 flex items-center gap-2">
           <span className="size-2 rounded-full bg-acorn" />
           <span className="text-[15px] font-medium">Kivora</span>
@@ -83,7 +107,10 @@ export function OverlayApp(): React.JSX.Element | null {
         </div>
 
         <div className="mb-1 text-[11px] text-faint">最近</div>
-        <div className="space-y-0.5">
+        <div
+          key={pending?.id ?? (state.queuedCount ? "queued" : "idle")}
+          className="motion-fade space-y-0.5"
+        >
           {pending ? (
             <Row label="待处理" value={`1 条待确认 · ${tailEllipsis(pending.title, 10)}`} accent />
           ) : state.queuedCount > 0 ? (

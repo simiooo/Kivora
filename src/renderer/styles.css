@@ -182,3 +182,170 @@
     transform: scaleY(1.15);
   }
 }
+
+/* ------------------------------------------------------------ 动效 */
+/*
+   一条原则：窗口"出现/消失"用浮层的语言（淡入 + 轻微上浮/缩放），
+   内容"状态切换"只做淡入淡出，不做位移——桌面工具不该像网页一样弹。
+   所有时长都在 120–240ms，关掉系统动效就走 prefers-reduced-motion。
+*/
+
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --motion-fast: 120ms;
+  --motion: 180ms;
+  --motion-slow: 240ms;
+}
+
+@keyframes kivora-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes kivora-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes kivora-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes kivora-rise-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes kivora-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kivora-pop-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+@keyframes kivora-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kivora-sheet-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes kivora-capsule-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kivora-capsule-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+}
+
+.motion-rise {
+  animation: kivora-rise-in var(--motion) var(--ease-out) both;
+}
+.motion-pop {
+  animation: kivora-pop-in var(--motion) var(--ease-out) both;
+}
+.motion-fade {
+  animation: kivora-fade-in var(--motion-fast) var(--ease-out) both;
+}
+.motion-sheet {
+  animation: kivora-sheet-in var(--motion) var(--ease-out) both;
+}
+.motion-capsule {
+  animation: kivora-capsule-in var(--motion) var(--ease-out) both;
+}
+.motion-exit-rise {
+  animation: kivora-rise-out var(--motion-fast) var(--ease-in) both;
+}
+.motion-exit-pop {
+  animation: kivora-pop-out var(--motion-fast) var(--ease-in) both;
+}
+.motion-exit-fade {
+  animation: kivora-fade-out var(--motion-fast) var(--ease-in) both;
+}
+.motion-exit-sheet {
+  animation: kivora-sheet-out var(--motion-fast) var(--ease-in) both;
+}
+.motion-exit-capsule {
+  animation: kivora-capsule-out var(--motion-fast) var(--ease-in) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-rise,
+  .motion-pop,
+  .motion-fade,
+  .motion-sheet,
+  .motion-capsule,
+  .motion-exit-rise,
+  .motion-exit-pop,
+  .motion-exit-fade,
+  .motion-exit-sheet,
+  .motion-exit-capsule {
+    animation: none !important;
+  }
+}
