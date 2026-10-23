@@ -10,6 +10,7 @@ import { getBoundModel } from "../repos/models.ts";
 import { getSecret, modelSecretName } from "../secrets.ts";
 import { permissionExtensionPath } from "../paths.ts";
 import { getPiVersion, piCliPath, piUsesShell } from "../env.ts";
+import { piBindingFor } from "../pi-config.ts";
 import { managedServerCount, mcpCapability } from "../mcp.ts";
 import { awaitApproval, cancelApprovalsForSession, openApproval } from "./approval-bus.ts";
 
@@ -65,24 +66,35 @@ function quoteWin(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-function safeModelSpec(): string | null {
+/** Kivora 绑定给"任务"的模型 → Pi 的 provider/model，按域名映射（见 pi-config.ts） */
+function taskBinding(): { spec: string; envName: string; key: string } | null {
   const model = getBoundModel("task");
-  if (!model) return null;
-  if (model.provider !== "openai" && model.provider !== "anthropic") return null;
-  if (!/^[A-Za-z0-9._:/-]+$/.test(model.modelId)) return null;
-  return `${model.provider}/${model.modelId}`;
+  const binding = piBindingFor(model);
+  if (!model || !binding) return null;
+  const key = getSecret(modelSecretName(model.id));
+  return key ? { ...binding, key } : null;
+}
+
+/** Pi 为什么起不来：给用户一句能照着做的话 */
+function piCredentialReason(): string | null {
+  const model = getBoundModel("task");
+  if (!piBindingFor(model)) {
+    return "Pi 认不出这个端点：把「任务」绑到 DeepSeek / OpenAI / Anthropic 的模型。";
+  }
+  if (model && !getSecret(modelSecretName(model.id))) {
+    return "这个任务模型还没有 Key，Pi 用不了。";
+  }
+  return null;
+}
+
+function safeModelSpec(): string | null {
+  return taskBinding()?.spec ?? null;
 }
 
 function piEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" };
-  const model = getBoundModel("task");
-  if (model) {
-    const key = getSecret(modelSecretName(model.id));
-    if (key) {
-      if (model.provider === "anthropic") env.ANTHROPIC_API_KEY = key;
-      else env.OPENAI_API_KEY = key;
-    }
-  }
+  const binding = taskBinding();
+  if (binding) env[binding.envName] = binding.key;
   return env;
 }
 
@@ -502,18 +514,22 @@ export function startPiRun(session: Session, hooks: PiRunHooks): void {
       return;
     }
     const detail = run.stderr.trim().split("\n").slice(-6).join("\n") || null;
-    const message = /api key|login|auth/i.test(run.stderr)
-      ? "Pi 没有可用的模型凭据（或 Key 被拒）。"
-      : `Pi 会话退出（exit ${code ?? "?"}）。`;
+    const message = /401|authentication|unauthor/i.test(run.stderr)
+      ? "Pi 的模型 Key 被拒（401），去模型仓库检查这个 Key。"
+      : /api key|login|auth/i.test(run.stderr)
+        ? "Pi 没有拿到模型凭据：把「任务」绑到 DeepSeek / OpenAI / Anthropic 的模型。"
+        : `Pi 会话退出（exit ${code ?? "?"}）。`;
     finish("failed", message, detail);
   });
 
   // 发任务：RPC 模式的任务文本走 prompt 命令，不走 argv
   void request(run, { type: "prompt", message: buildTaskPrompt(session) }, 60_000).catch((err: Error) => {
-    const noCreds = /api key|login|auth|unauthor|provider/i.test(`${run.stderr}\n${err.message}`);
+    const output = `${run.stderr}\n${err.message}`;
+    const rejected = /401|authentication|unauthor/i.test(output);
+    const reason = piCredentialReason();
     finish(
       "failed",
-      noCreds ? "Pi 没有可用的模型凭据，先在设置 → 扩展里把模型配好。" : "Pi 没接下这个任务。",
+      rejected ? "Pi 的模型 Key 被拒（401），去模型仓库检查这个 Key。" : (reason ?? "Pi 没接下这个任务。"),
       run.stderr.trim().slice(-500) || err.message,
     );
   });
