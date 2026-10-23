@@ -19,6 +19,8 @@ import { route, renderStatus, type RouterContext } from "./router.ts";
 import { cancelRun, isRunning, pickScenario, startTask } from "./runner.ts";
 import { cancelPiRun, isPiRunning, steerPiRun } from "./pi-runner.ts";
 import { mockMode, piAvailable } from "../env.ts";
+import { beginTurn, isCurrentTurn, setThinking } from "../turn-state.ts";
+import { acknowledgmentFor } from "./ack.ts";
 import { broadcast, speak } from "../bus.ts";
 import { getConfig } from "../repos/config.ts";
 import { getBoundModel } from "../repos/models.ts";
@@ -136,13 +138,17 @@ export function pump(): void {
   }
 }
 
-async function brainDecision(text: string, context: string): Promise<{ action: string; title?: string; speech?: string } | null> {
+async function brainDecision(
+  text: string,
+  context: string,
+  signal?: AbortSignal,
+): Promise<{ action: string; title?: string; speech?: string } | null> {
   if (mockMode()) return null;
   const model = getBoundModel("brain");
   if (!model) return null;
   const key = getSecret(modelSecretName(model.id));
   if (!key && model.provider !== "custom") return null;
-  return classify(model, key, text, context);
+  return classify(model, key, text, context, signal);
 }
 
 export async function handleUtterance(
@@ -155,6 +161,7 @@ export async function handleUtterance(
     return { messages: [], action: { kind: "none" }, spoken: null };
   }
 
+  const ticket = beginTurn();
   const user = appendMessage({
     role: "user",
     content: raw,
@@ -163,12 +170,38 @@ export async function handleUtterance(
   });
   turn.push(user);
 
+  /**
+   * 先出声（方案 3.9）：把话交给模型判断时进入"在想"，并在 400ms 还没结果时
+   * 播一句缓存的接话。400ms 内就拿到结论的，不播 ack——直接说真正的旁白，
+   * 免得一句话被 ack + 结论拆成两段。
+   */
+  const ACK_AFTER_MS = 400;
+  let acked = false;
+  const think = async <T,>(work: () => Promise<T>): Promise<T> => {
+    const config = getConfig();
+    let ackTimer: NodeJS.Timeout | null = null;
+    if (!acked && config.narration && config.ackEnabled) {
+      acked = true;
+      ackTimer = setTimeout(() => void speak(acknowledgmentFor(raw)), ACK_AFTER_MS);
+    }
+    setThinking(true);
+    try {
+      return await work();
+    } finally {
+      if (ackTimer) clearTimeout(ackTimer);
+      setThinking(false);
+    }
+  };
+
   const context = buildContext();
   let intent = route(raw, context);
 
   // 反射没命中"建任务"之外的动作时，给 brain 一次机会（4s 超时，失败就按字面做）
   if (intent.kind === "create_task" && context.running) {
-    const decision = await brainDecision(raw, describeContext(context));
+    const decision = await think(() => brainDecision(raw, describeContext(context), ticket.signal));
+    if (!isCurrentTurn(ticket.seq)) {
+      return { messages: turn.messages, action: { kind: "none" }, spoken: null };
+    }
     if (decision) {
       if (decision.action === "status") intent = { kind: "status", sessionId: context.running.id };
       else if (decision.action === "cancel") intent = { kind: "cancel", sessionId: context.running.id };
@@ -350,7 +383,10 @@ export async function handleUtterance(
       const scenario = pickScenario(intent.text);
       let finalTitle = title;
       if (!mockMode()) {
-        const decision = await brainDecision(intent.text, "没有正在跑的任务");
+        const decision = await think(() => brainDecision(intent.text, "没有正在跑的任务", ticket.signal));
+        if (!isCurrentTurn(ticket.seq)) {
+          return { messages: turn.messages, action: { kind: "none" }, spoken: null };
+        }
         if (decision?.speech) scenario.narration = decision.speech;
         if (decision?.title) {
           finalTitle = decision.title;

@@ -1,5 +1,5 @@
-import type { Session, SessionPhase } from "../../shared/domain.ts";
-import { appendEvent, appendMessage, patchStatus, setSessionError, setSessionState } from "../repos/sessions.ts";
+﻿import type { Session, SessionPhase } from "../../shared/domain.ts";
+import { appendEvent, appendMessage, getSession, patchStatus, setSessionError, setSessionState } from "../repos/sessions.ts";
 import { broadcast, speak } from "../bus.ts";
 import { awaitApproval, openApproval } from "./approval-bus.ts";
 import { getConfig } from "../repos/config.ts";
@@ -208,13 +208,38 @@ export function startRun(session: Session, hooks: RunnerHooks): void {
 export type RunMode = "mock" | "real" | "pi";
 
 /** 演练模式走脚本；关掉演练按设置选内置执行器或 Pi 会话 */
+/**
+ * 任务开始 8 秒还没结束，补一句"还在弄"——只一次（方案 3.9）。
+ * 否则用户对着安静等，不知道是在干活还是卡住了。
+ */
+const STILL_WORKING_MS = 8_000;
+
+function announceIfSlow(session: Session): () => void {
+  let fired = false;
+  const timer = setTimeout(() => {
+    if (fired || !getConfig().narration) return;
+    const current = getSession(session.id);
+    if (!current || (current.state !== "running" && current.state !== "waiting_user")) return;
+    fired = true;
+    void speak("还在弄，稍等。");
+  }, STILL_WORKING_MS);
+  return () => clearTimeout(timer);
+}
+
 export function startTask(session: Session, hooks: RunnerHooks, mode: RunMode): void {
+  const stopAnnounce = announceIfSlow(session);
+  const wrapped: RunnerHooks = {
+    onFinish: (id) => {
+      stopAnnounce();
+      hooks.onFinish(id);
+    },
+  };
   if (mode === "pi") {
-    startPiRun(session, hooks);
+    startPiRun(session, wrapped);
     return;
   }
-  if (mode === "real") startRealRun(session, hooks);
-  else startRun(session, hooks);
+  if (mode === "real") startRealRun(session, wrapped);
+  else startRun(session, wrapped);
 }
 
 /**

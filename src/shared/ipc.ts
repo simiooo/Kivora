@@ -63,6 +63,7 @@ export type ChangeKind =
   | "overlay"
   | "voice"
   | "speech"
+  | "speech-stop"
   | "hotkey";
 
 export interface ChangeEvent {
@@ -130,6 +131,8 @@ export const IPC = {
   voiceState: "kivora:voice:state",
   voiceLevel: "kivora:voice:level",
   voiceStop: "kivora:voice:stop",
+  speechDone: "kivora:speech:done",
+  interrupt: "kivora:turn:interrupt",
   windowOpenSettings: "kivora:window:open-settings",
 
   changed: "kivora:changed",
@@ -208,6 +211,10 @@ export interface KivoraBridge {
   reportLevel(level: number): void;
   /** 主进程让主窗停下来（来自悬浮窗或后续的快捷键） */
   onStopVoice(cb: () => void): () => void;
+  /** 播报放完了，主进程据此把"在说"关掉 */
+  speechDone(): void;
+  /** 打断：停播报 + 取消正在等的那次判断；返回是否真的打断了什么 */
+  interrupt(): Promise<boolean>;
 }
 
 export interface McpProbeResult {

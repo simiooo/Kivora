@@ -1,4 +1,4 @@
-﻿import { concatFloat32, encodeWav } from "@shared/wav.ts";
+import { concatFloat32, encodeWav } from "@shared/wav.ts";
 import { Endpointer, boostLevel, rms, type EndpointEvent, type EndpointOptionsInput } from "./vad.ts";
 /** 播放与录音：全部走 Web API，主进程只管把字节算出来 */
 
@@ -27,7 +27,7 @@ export function stopPlayback(fadeMs = 120): void {
   }, 20);
 }
 
-export async function playClip(base64: string, mime: string): Promise<void> {
+export async function playClip(base64: string, mime: string, onDone?: () => void): Promise<void> {
   stopPlayback(60);
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -38,11 +38,18 @@ export async function playClip(base64: string, mime: string): Promise<void> {
   const el = new Audio(objectUrl);
   el.volume = 1;
   audioEl = el;
+  el.addEventListener("ended", () => onDone?.(), { once: true });
   try {
     await el.play();
   } catch {
     // 自动播放被拦时静默失败：语音不是关键路径
+    onDone?.();
   }
+}
+
+/** 有没有音频在播——免按键监听要避开自己说话，否则会自己触发自己 */
+export function isSpeakingAudio(): boolean {
+  return Boolean(audioEl && !audioEl.paused && !audioEl.ended);
 }
 
 export interface MicDevice {

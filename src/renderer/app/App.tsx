@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useBootstrap, useRoute } from "../lib/hooks.ts";
 import { bridge } from "../lib/bridge.ts";
-import { playClip } from "../lib/audio.ts";
+import { playClip, stopPlayback } from "../lib/audio.ts";
 import { ToastProvider, Spinner } from "../components/ui.tsx";
 import { TimelinePage } from "../pages/TimelinePage.tsx";
 import { HistoryPage } from "../pages/HistoryPage.tsx";
@@ -15,8 +15,12 @@ export default function App(): React.JSX.Element {
   // 语音播报：主进程把音频推过来，这里统一播（新语音抢占旧语音）
   useEffect(() => {
     return bridge.subscribe((event) => {
+      if (event.kind === "speech-stop") {
+        stopPlayback(60);
+        return;
+      }
       if (event.kind === "speech" && event.speech?.audioBase64) {
-        void playClip(event.speech.audioBase64, event.speech.mime);
+        void playClip(event.speech.audioBase64, event.speech.mime, () => bridge.speechDone());
       }
     });
   }, []);

@@ -1,4 +1,4 @@
-import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+﻿import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { IPC, type ModelPreset } from "../shared/ipc.ts";
 import type { AppConfig, ApprovalResolution, ModuleKey, OverlayState } from "../shared/domain.ts";
@@ -42,7 +42,8 @@ import { assertProbeable, probeMcpServer } from "./mcp-client.ts";
 import { probeModel } from "./providers/probe.ts";
 import { mockMode } from "./env.ts";
 import { synthesizeSpeech, transcribeAudio } from "./voice.ts";
-import { broadcast } from "./bus.ts";
+import { broadcast, isSpeaking, setSpeaking } from "./bus.ts";
+import { interruptTurn, isThinking } from "./turn-state.ts";
 import { focusMain, hideOverlay, refreshPermissionWindow, resizeOverlay } from "./windows.ts";
 import { findRunningSession } from "./repos/sessions.ts";
 
@@ -109,6 +110,7 @@ const configPatchSchema = z.object({
   ackEnabled: z.boolean().optional(),
   autoStop: z.boolean().optional(),
   autoStopSilenceMs: z.number().int().min(300).max(3000).optional(),
+  handsFree: z.boolean().optional(),
   asrLanguage: z.enum(["zh", "en", "auto"]).optional(),
   permissionWindow: z.boolean().optional(),
   approvalTimeoutSec: z.number().int().min(10).max(300).optional(),
@@ -437,8 +439,15 @@ export function registerIpc(deps: IpcDeps): void {
       lastRun: last ? { title: last.title, state: last.state, ageMs: Date.now() - last.updatedAt } : null,
       hotkey: config.hotkey,
       autoStop: config.autoStop,
+      thinking: isThinking(),
+      speaking: isSpeaking(),
+      handsFree: config.handsFree,
     };
   });
+
+  handle(IPC.interrupt, () => interruptTurn());
+
+  ipcMain.on(IPC.speechDone, () => setSpeaking(false));
 
   handle(IPC.overlayAsk, () => {
     focusMain();

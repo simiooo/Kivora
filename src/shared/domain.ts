@@ -323,6 +323,8 @@ export interface AppConfig {
   autoStop: boolean;
   /** 静音多久算说完 */
   autoStopSilenceMs: number;
+  /** 免按键：麦克风常开，检测到人说话就自动开始识别 */
+  handsFree: boolean;
   asrLanguage: AsrLanguage;
   /** 浮窗（画板 09） */
   permissionWindow: boolean;
@@ -469,6 +471,12 @@ export interface OverlayState {
   hotkey: string;
   /** 说完自动结束开着时，悬浮窗的提示文案要跟着变 */
   autoStop: boolean;
+  /** 模型正在判断/思考——悬浮窗要显示"在想" */
+  thinking: boolean;
+  /** 正在播报——悬浮窗可以显示"在说"并允许打断 */
+  speaking: boolean;
+  /** 免按键：一直在等用户开口 */
+  handsFree: boolean;
 }
 
 /* --------------------------------------------------------------- 杂项 */

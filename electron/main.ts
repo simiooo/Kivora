@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut } from "electron";
+﻿import { app, BrowserWindow, globalShortcut } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { IPC } from "../src/shared/ipc.ts";
@@ -22,6 +22,7 @@ import {
   updateTrayStatus,
 } from "../src/main/windows.ts";
 import { markListening, normalizeAccelerator, registerIpc } from "../src/main/ipc.ts";
+import { idleMs } from "../src/main/turn-state.ts";
 import { broadcast, setBroadcastHook } from "../src/main/bus.ts";
 import { answerById, expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
 import { stopAllPiRuns } from "../src/main/dispatcher/pi-runner.ts";
@@ -33,6 +34,7 @@ import { MCP_PRESETS, saveServer } from "../src/main/mcp.ts";
 const isShots = process.argv.includes("--shots") || process.env.KIVORA_SHOTS === "1";
 const isFlow = process.argv.includes("--flow") || process.env.KIVORA_FLOW === "1";
 const isSmoke = process.argv.includes("--smoke") || process.env.KIVORA_SMOKE === "1" || isShots;
+const HANDS_FREE_IDLE_MS = 30 * 60 * 1000;
 
 let currentHotkey = "";
 
@@ -406,6 +408,12 @@ app.whenReady().then(async () => {
     if (expired.length) {
       console.log(`[kivora] ${expired.length} approvals expired (default deny)`);
       refreshPermissionWindow();
+    }
+    // 免按键模式 30 分钟没人理就退回热键模式（方案 1.2 的护栏）
+    if (getConfig().handsFree && idleMs() > HANDS_FREE_IDLE_MS) {
+      setConfig({ handsFree: false });
+      console.log("[kivora] hands-free off after idle");
+      broadcast("config");
     }
   }, 3000);
 

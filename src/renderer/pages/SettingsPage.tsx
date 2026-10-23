@@ -373,6 +373,16 @@ function VoiceSection({
             )
           }
         />
+        <ToggleRow
+          title="免按键，开口就说"
+          description="麦克风常开，检测到你在说话就自动开始识别，全程不用按热键。代价是 Windows 会一直显示麦克风占用；它自己在播报时不会听，避免把自己的声音当成你。"
+          checked={bootstrap.config.handsFree}
+          onChange={(value) =>
+            void onConfig({ handsFree: value }).catch((err) =>
+              toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
+            )
+          }
+        />
         <div className="flex items-center gap-3 border-t border-border/60 py-4">
           <div className="min-w-0 flex-1">
             <div className="text-[14px]">静音多久算说完</div>

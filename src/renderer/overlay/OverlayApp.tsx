@@ -72,9 +72,13 @@ export function OverlayApp(): React.JSX.Element | null {
   if (!state) return null;
 
   const listening = state.listening;
+  const thinking = state.thinking;
+  const speaking = state.speaking;
   const pending = state.pendingApproval;
   const running = state.foreground;
-  const status = listening ? "在听" : running ? "在想" : "待命";
+  // 状态优先级：在听 > 在想 > 在说 > 在跑 > 待命
+  const status = listening ? "在听" : thinking ? "在想" : speaking ? "在说" : running ? "在忙" : "待命";
+  const busy = listening || thinking || speaking;
   const empty = !pending && state.queuedCount === 0 && !running && !state.lastRun;
 
   return (
@@ -83,8 +87,8 @@ export function OverlayApp(): React.JSX.Element | null {
       <div ref={cardRef} className="shrink-0 overflow-hidden rounded-[18px] border border-white/5 bg-card shadow-float">
         <div className="drag-region flex items-center gap-2 px-5 pt-4 pb-3" data-drag="1">
           <span className="relative grid size-2 place-items-center">
-            <span className={cn("size-2 rounded-full", listening || running ? "bg-acorn" : "bg-faint")} />
-            {listening || running ? (
+            <span className={cn("size-2 rounded-full", busy || running ? "bg-acorn" : "bg-faint")} />
+            {busy || running ? (
               <span className="absolute size-2 animate-ping rounded-full bg-acorn opacity-40" />
             ) : null}
           </span>
@@ -92,11 +96,14 @@ export function OverlayApp(): React.JSX.Element | null {
           <span
             className={cn(
               "rounded-full px-2 py-0.5 text-[11px]",
-              listening ? "bg-acorn/15 text-acorn" : running ? "bg-acorn/10 text-acorn/90" : "bg-muted text-faint",
+              listening ? "bg-acorn/15 text-acorn" : busy || running ? "bg-acorn/10 text-acorn/90" : "bg-muted text-faint",
             )}
           >
             {status}
           </span>
+          {state.handsFree && !listening ? (
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-faint">免按键</span>
+          ) : null}
           <span className="ml-auto font-mono text-[11px] text-faint">{formatHotkey(state.hotkey)}</span>
           <button
             type="button"
@@ -114,6 +121,22 @@ export function OverlayApp(): React.JSX.Element | null {
             <p className="mt-2 text-[11px] text-faint">
               {state.autoStop ? "说完会自动结束；不想发就点「停」" : "说完点「停」，或按 Esc 取消这一句"}
             </p>
+          </div>
+        ) : null}
+
+        {thinking || speaking ? (
+          <div className="flex items-center gap-3 px-5 pb-4">
+            <ThinkingDots />
+            <p className="min-w-0 flex-1 text-[12px] text-faint">
+              {thinking ? "我在捋你的意思，马上就好。" : "我在说，随时可以打断。"}
+            </p>
+            <button
+              type="button"
+              onClick={() => void bridge.interrupt()}
+              className="no-drag h-7 shrink-0 rounded-[9px] bg-muted px-2.5 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              打断
+            </button>
           </div>
         ) : null}
 
@@ -167,6 +190,21 @@ export function OverlayApp(): React.JSX.Element | null {
         </div>
       </div>
     </div>
+  );
+}
+
+/** 三颗跳动的点：表示"在想"，比转圈更安静 */
+function ThinkingDots(): React.JSX.Element {
+  return (
+    <span className="flex items-end gap-1" aria-hidden>
+      {[0, 1, 2].map((index) => (
+        <span
+          key={index}
+          className="size-1.5 rounded-full bg-acorn/80"
+          style={{ animation: `pulse-dot 1s ease-in-out ${index * 0.15}s infinite` }}
+        />
+      ))}
+    </span>
   );
 }
 

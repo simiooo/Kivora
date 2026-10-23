@@ -257,6 +257,7 @@ export function TimelinePage({
         onListeningChange={setListening}
         autoStop={bootstrap.config.autoStop}
         autoStopSilenceMs={bootstrap.config.autoStopSilenceMs}
+        handsFree={bootstrap.config.handsFree}
       />
 
       <QueuePanel

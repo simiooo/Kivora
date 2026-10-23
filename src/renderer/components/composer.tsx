@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, Mic, Square, X } from "lucide-react";
 import { bridge } from "../lib/bridge.ts";
-import { Recorder, listMics, type MicDevice } from "../lib/audio.ts";
+import { Recorder, isSpeakingAudio, listMics, type MicDevice } from "../lib/audio.ts";
+import { WakeGate } from "../lib/wake.ts";
 import { cn } from "../lib/utils.ts";
 import { useToast } from "./ui.tsx";
 
@@ -14,6 +15,7 @@ export function Composer({
   onListeningChange,
   autoStop,
   autoStopSilenceMs,
+  handsFree,
 }: {
   busy: boolean;
   runningTitle: string | null;
@@ -23,6 +25,7 @@ export function Composer({
   onListeningChange?: (listening: boolean) => void;
   autoStop: boolean;
   autoStopSilenceMs: number;
+  handsFree: boolean;
 }): React.JSX.Element {
   const toast = useToast();
   const [draft, setDraft] = useState("");
@@ -161,10 +164,14 @@ export function Composer({
 
   useEffect(() => {
     // 热键是开关：按一下开始录，再按一下结束并发送（没有"按住"这回事，
-    // 全局快捷键收不到松开事件）
+    // 全局快捷键收不到松开事件）。开始之前先打断正在播报/思考的那一轮。
     const unsubscribe = bridge.onHotkey(() => {
-      if (recorder.current.active) void stopRecording();
-      else void startRecording();
+      if (recorder.current.active) {
+        void stopRecording();
+        return;
+      }
+      void bridge.interrupt();
+      void startRecording();
     });
     return unsubscribe;
   }, [startRecording, stopRecording]);
@@ -192,6 +199,27 @@ export function Composer({
     });
   }, [cancelRecording, stopRecording]);
 
+  // 免按键：麦克风常开只做"有人开口"的判断，检测到就自动开始录音
+  const gateErrorShown = useRef(false);
+  useEffect(() => {
+    if (!handsFree || recording) return;
+    const gate = new WakeGate({
+      deviceId: micId || undefined,
+      isSpeaking: isSpeakingAudio,
+      onWake: () => void startRecording(),
+    });
+    void gate.start().catch((err) => {
+      if (gateErrorShown.current) return;
+      gateErrorShown.current = true;
+      toast.push({
+        tone: "error",
+        title: "免按键没启动",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    });
+    return () => gate.stop();
+  }, [handsFree, micId, recording, startRecording, toast]);
+
   // 阅读器里「引用到输入框」
   useEffect(() => {
     const handler = (event: Event): void => {
@@ -205,7 +233,10 @@ export function Composer({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === "Escape" && recorder.current.active) cancelRecording();
+      if (event.key !== "Escape") return;
+      // Esc 有两种含义：正在录就取消这一句，否则打断正在播报/思考的那一轮
+      if (recorder.current.active) cancelRecording();
+      else void bridge.interrupt();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

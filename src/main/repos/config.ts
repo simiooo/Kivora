@@ -9,6 +9,7 @@ export const CONFIG_DEFAULTS: AppConfig = {
   ackEnabled: true,
   autoStop: true,
   autoStopSilenceMs: 800,
+  handsFree: false,
   asrLanguage: "zh",
   permissionWindow: true,
   approvalTimeoutSec: 45,

@@ -34,8 +34,11 @@ export async function classify(
   apiKey: string | null,
   text: string,
   context: string,
+  signal?: AbortSignal,
 ): Promise<BrainDecision | null> {
   const controller = new AbortController();
+  const onAbort = (): void => controller.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
   const timer = setTimeout(() => controller.abort(), 4000);
   try {
     const result = await chatCompletion(
@@ -63,5 +66,6 @@ export async function classify(
     return null;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
   }
 }
