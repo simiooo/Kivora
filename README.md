@@ -113,7 +113,7 @@ pnpm shots      # 七个界面全截图到 artifacts/
 Windows 凭据管理器（DPAPI）        # API Key，只存密文
 ```
 
-事件与审计按设置里的天数清理（默认 7 天），消息不自动删。\n\n默认模型栈：调度/任务 `deepseek-chat`（`https://api.deepseek.com/v1`），识别 `qwen-audio-3.1-asr-flash-message`、合成 `qwen-audio-3.1-tts-flash`（阿里百炼 OpenAI 兼容端点）。语音型号在设置 → 模型里可以换，长文件转写用 `...-filetrans`、下一代合成用 `...-tts-next`、流式用 `...-realtime-plus`。
+事件与审计按设置里的天数清理（默认 7 天），消息不自动删。\n\n默认模型栈：调度/任务 `deepseek-chat`（`https://api.deepseek.com/v1`），识别 `qwen-audio-3.1-asr-flash-message`、合成 `qwen-audio-3.1-tts-flash`（默认 Base URL 指向一家 OpenAI 兼容的音频端点，换厂商只改 Base URL/Key/模型 ID）。语音型号在设置 → 模型里可以换，长文件转写用 `...-filetrans`、下一代合成用 `...-tts-next`、流式用 `...-realtime-plus`。
 
 ## 已知边界（说清楚，不假装）
 

@@ -194,8 +194,8 @@ function ConnectStep({
         return saved;
       };
 
-      const asr = await upsert("asr", "Qwen ASR", asrId, { ...DEFAULT_PARAMS, temperature: null, maxTokens: null });
-      const tts = await upsert("tts", "Qwen TTS", ttsId, {
+      const asr = await upsert("asr", "语音识别", asrId, { ...DEFAULT_PARAMS, temperature: null, maxTokens: null });
+      const tts = await upsert("tts", "语音合成", ttsId, {
         ...DEFAULT_PARAMS,
         temperature: null,
         maxTokens: null,
@@ -315,10 +315,16 @@ function ConnectStep({
 
         {voiceOn ? (
           <div className="mt-4">
-            <Field label="语音 Base URL" hint="阿里百炼的 OpenAI 兼容端点；识别和合成共用。">
+            <Field
+              label="语音 Base URL"
+              hint="任意 OpenAI 兼容的音频端点。默认填的是一家厂商的地址，换厂商直接改这里。"
+            >
               <Input value={voiceBase} onChange={(event) => setVoiceBase(event.target.value)} spellCheck={false} />
             </Field>
-            <Field label="百炼 API Key" hint="识别和合成同一个 Key，存进 Windows 凭据管理器。">
+            <Field
+              label="语音 API Key"
+              hint="识别和合成默认共用一个 Key；两家厂商分开的话，保存后到设置 → 模型里分别改。"
+            >
               <Input
                 type="password"
                 value={voiceKey}
