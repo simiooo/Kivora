@@ -86,13 +86,33 @@ export function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
+/**
+ * 把上游报文里那句最有用的话挑出来，拼进给人看的 message。
+ * 400 的典型内容是 `{"error":{"message":"Model Not Exist"}}` —— 只有把这句话带出来，
+ * 用户才知道是模型 ID 写错了，而不是「端点返回 400」这种等于没说的话。
+ */
+function upstreamHint(body: string): string | null {
+  const text = body.trim();
+  if (!text) return null;
+  try {
+    const json = JSON.parse(text) as { error?: { message?: unknown } | string; message?: unknown; msg?: unknown };
+    const nested = typeof json.error === "string" ? json.error : json.error?.message;
+    const raw = typeof nested === "string" ? nested : typeof json.message === "string" ? json.message : typeof json.msg === "string" ? json.msg : null;
+    if (raw?.trim()) return raw.trim().slice(0, 200);
+  } catch {
+    // 不是 JSON，退回纯文本
+  }
+  return text.replace(/\s+/g, " ").slice(0, 200);
+}
+
 export function errorFromStatus(status: number, body: string): AppError {
   const detail = body.slice(0, 1200);
+  const hint = upstreamHint(body);
   if (status === 401 || status === 403) return new AppError("auth_failed", { detail });
   if (status === 404) return new AppError("bad_response", { detail, message: "端点或模型不存在，核对 Base URL 和模型 ID。" });
   if (status === 429) return new AppError("rate_limited", { detail });
   if (status >= 500) return new AppError("upstream_error", { detail });
-  return new AppError("upstream_error", { detail, message: `端点返回 ${status}。` });
+  return new AppError("upstream_error", { detail, message: `端点返回 ${status}${hint ? `：${hint}` : "。"}` });
 }
 
 /** 把 fetch 的网络错误归一化，避免把 "fetch failed" 直接抛给用户 */

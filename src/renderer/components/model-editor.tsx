@@ -5,6 +5,7 @@ import { DEFAULT_PARAMS } from "@shared/domain.ts";
 import type { ModelPreset } from "@shared/ipc.ts";
 import { bridge, toUiError } from "../lib/bridge.ts";
 import { formatTime } from "@shared/text.ts";
+import { defaultVoiceFor, isKnownVoice, voiceHintFor, voicesForModel } from "@shared/voice-catalog.ts";
 import { Button, Field, IconButton, Input, Sheet, useToast } from "./ui.tsx";
 import { cn } from "../lib/utils.ts";
 
@@ -35,7 +36,8 @@ function fromModel(model: ModelRecord | null, presets: ModelPreset[]): EditorSta
     temperature: params.temperature === null ? "" : String(params.temperature),
     maxTokens: params.maxTokens === null ? "" : String(params.maxTokens),
     topP: params.topP === null ? "" : String(params.topP),
-    voice: params.voice ?? "alloy",
+    // 音色跟着模型走：认识的模型用它自己的默认音色，不认识的留空让用户填
+    voice: params.voice ?? defaultVoiceFor(model?.modelId ?? "") ?? "",
     speed: params.speed === null ? "" : String(params.speed),
     headers: model?.headers ?? [],
     apiKey: "",
@@ -48,6 +50,8 @@ function parseNumber(value: string): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
+
+const VOICE_LIST_ID = "kivora-voice-options";
 
 export function ModelEditor({
   open,
@@ -79,6 +83,7 @@ export function ModelEditor({
   }, [open, model, presets]);
 
   const update = (patch: Partial<EditorState>): void => setState((prev) => ({ ...prev, ...patch }));
+  const voiceOptions = useMemo(() => voicesForModel(state.modelId) ?? [], [state.modelId]);
 
   const buildDraft = (): ModelDraft | null => {
     if (!state.name.trim()) {
@@ -286,7 +291,14 @@ export function ModelEditor({
         </Field>
       </div>
 
-      <Field label="Base URL" hint="留到 /v1 这一级，Kivora 自己拼 /chat/completions 这类路径。">
+      <Field
+        label="Base URL"
+        hint={
+          state.provider === "dashscope"
+            ? "语音走 WebSocket，填厂商给的 wss 地址，路径不要自己加。"
+            : "填到 /v1 这一级，Kivora 自己拼 /chat/completions 这类路径。"
+        }
+      >
         <Input
           value={state.baseUrl}
           onChange={(event) => update({ baseUrl: event.target.value })}
@@ -298,7 +310,13 @@ export function ModelEditor({
       <Field label="模型 ID">
         <Input
           value={state.modelId}
-          onChange={(event) => update({ modelId: event.target.value })}
+          onChange={(event) => {
+            const modelId = event.target.value;
+            const fallback = defaultVoiceFor(modelId);
+            // 音色跟模型绑定：换到另一个认识的模型时，别把旧模型的音色带过去
+            const voice = fallback && state.capability === "tts" && isKnownVoice(modelId, state.voice) !== true ? fallback : state.voice;
+            update({ modelId, voice });
+          }}
           placeholder="gpt-4.1-mini"
           spellCheck={false}
         />
@@ -350,11 +368,33 @@ export function ModelEditor({
       ) : null}
 
       {state.capability === "tts" ? (
-        <Field label="语音参数">
+        <Field label="语音参数" hint={voiceHintFor(state.modelId) ?? "音色由厂商决定；填错时服务会报 InvalidParameter。"}>
           <div className="grid grid-cols-2 gap-2">
-            <LabeledInput label="音色" value={state.voice} onChange={(value) => update({ voice: value })} />
+            <div>
+              <span className="mb-1 block text-[11px] text-faint">音色</span>
+              <Input
+                value={state.voice}
+                onChange={(event) => update({ voice: event.target.value })}
+                list={voiceOptions.length > 0 ? VOICE_LIST_ID : undefined}
+                placeholder={defaultVoiceFor(state.modelId) ?? "alloy"}
+                spellCheck={false}
+                className="h-9 font-mono text-[12px]"
+              />
+              {voiceOptions.length > 0 ? (
+                <datalist id={VOICE_LIST_ID}>
+                  {voiceOptions.map((option) => (
+                    <option key={option.id} value={option.id} label={option.label} />
+                  ))}
+                </datalist>
+              ) : null}
+            </div>
             <LabeledInput label="语速" value={state.speed} onChange={(value) => update({ speed: value })} />
           </div>
+          {voiceOptions.length > 0 ? (
+            <p className="mt-2 text-[11px] leading-5 text-faint">
+              点输入框挑候选；列表之外的音色能不能用，取决于厂商。
+            </p>
+          ) : null}
         </Field>
       ) : null}
 

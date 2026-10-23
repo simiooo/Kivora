@@ -42,6 +42,7 @@ export async function probeModel(model: ModelRecord, apiKey: string | null, mock
           model: model.modelId,
           text: "好",
           voice: model.params.voice,
+          speed: model.params.speed,
         });
       }
     } else if (model.capability === "asr") {

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { IPC } from "../src/shared/ipc.ts";
 import { closeStore, openStore, pruneOldData, recoverOrphanSessions } from "../src/main/store.ts";
-import { dedupeModels, migrateDeepSeekModelIds, migrateLegacyVoiceSeeds, seedModels } from "../src/main/repos/models.ts";
+import { dedupeModels, migrateDeepSeekModelIds, migrateLegacyVoiceSeeds, repairTtsVoices, seedModels } from "../src/main/repos/models.ts";
 import { initSecrets } from "../src/main/secrets.ts";
 import { getConfig, setConfig } from "../src/main/repos/config.ts";
 import { initPi } from "../src/main/env.ts";
@@ -246,11 +246,11 @@ async function runShots(): Promise<void> {
   await wait(400);
   await capture(win, "shot-09-queue.png");
 
-  // 模型详情（点第一行，画板 13）
+  // 模型详情（点 TTS 那一行，画板 13；顺便看音色候选）
   await loadRoute(win, "/settings/models");
   await wait(700);
   await win.webContents.executeJavaScript(
-    `(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent && x.textContent.includes('gpt-4.1-mini')); if (b) b.click(); return Boolean(b); })()`,
+    `(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent && x.textContent.includes('qwen-audio-3.1-tts-flash')); if (b) b.click(); return Boolean(b); })()`,
   );
   await wait(500);
   await capture(win, "shot-10-model-editor.png");
@@ -308,6 +308,11 @@ app.whenReady().then(async () => {
     migrateDeepSeekModelIds();
   } catch (err) {
     console.error("[kivora] deepseek id migration failed", err);
+  }
+  try {
+    repairTtsVoices();
+  } catch (err) {
+    console.error("[kivora] tts voice repair failed", err);
   }
   try {
     dedupeModels();

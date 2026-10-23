@@ -166,6 +166,46 @@ describe("DashScope WebSocket 协议", () => {
     await new Promise<void>((resolve) => http.close(() => resolve()));
   });
 
+  it("音色不属于模型（InvalidParameter / 411）翻译成人话", async () => {
+    active = await startServer((socket, message) => {
+      const header = message.header as { action?: string } | undefined;
+      if (header?.action === "run-task") {
+        socket.send(
+          JSON.stringify({
+            header: {
+              event: "task-failed",
+              error_code: "InvalidParameter",
+              error_message: "[cosyvoice]Engine error [411]: TTS speak operation failed",
+            },
+          }),
+        );
+      }
+    });
+
+    await expect(
+      synthesizeViaWebSocket({
+        url: active.url,
+        apiKey: "k",
+        model: "qwen-audio-3.1-tts-flash",
+        text: "好",
+        voice: "Cherry",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", message: expect.stringContaining("Cherry") as unknown as string });
+  });
+
+  it("语速映射到 rate，且被夹到 0.5–2", async () => {
+    active = await startServer((socket, message) => {
+      const header = message.header as { action?: string } | undefined;
+      if (header?.action === "run-task") socket.send(JSON.stringify({ header: { event: "task-started" } }));
+      else if (header?.action === "continue-task") socket.send(Buffer.from([1]));
+      else if (header?.action === "finish-task") socket.send(JSON.stringify({ header: { event: "task-finished" } }));
+    });
+
+    await synthesizeViaWebSocket({ url: active.url, apiKey: "k", model: "m", text: "hi", speed: 9 });
+    const start = active.received[0] as unknown as { payload: { parameters: { rate: number } } };
+    expect(start.payload.parameters.rate).toBe(2);
+  });
+
   it("消息构造带上 task_id 与 duplex", () => {
     const start = buildTtsStart("abc", "m", "v", "mp3", 24_000);
     expect(start.header).toEqual({ action: "run-task", task_id: "abc", streaming: "duplex" });

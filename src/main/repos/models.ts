@@ -13,6 +13,7 @@ import { DEFAULT_PARAMS, MODULE_CAPABILITY } from "../../shared/domain.ts";
 import { AppError } from "../../shared/errors.ts";
 import { deleteSecret, hasSecret, modelSecretName, putSecret } from "../secrets.ts";
 import { maskKey } from "../../shared/text.ts";
+import { defaultVoiceFor, isKnownVoice } from "../../shared/voice-catalog.ts";
 import { newId } from "../../shared/domain.ts";
 
 interface ModelRow {
@@ -230,7 +231,8 @@ export function bindModel(module: ModuleKey, modelId: string | null): Binding[] 
 /* ------------------------------------------------------------ 种子 */
 
 const DASHSCOPE_WS = "wss://cn-beijing.maas.qianwenaiapi.com/api-ws/v1/inference";
-const QWEN_VOICE = "longanhuan_v3.1";
+/** 音色跟模型绑定，默认值从清单里取，别在这儿写第二个来源 */
+const QWEN_VOICE = defaultVoiceFor("qwen-audio-3.1-tts-flash") ?? "longanhuan_v3.1";
 
 /** 同一 (提供方/能力/地址/模型 ID) 只留一条：优先留被绑定的、有 Key 的、最早的那条。 */
 export function dedupeModels(): number {
@@ -260,36 +262,68 @@ export function dedupeModels(): number {
   if (removed > 0) console.log(`[kivora] removed ${removed} duplicate models`);
   return removed;
 }
-/** DeepSeek 的模型名变了：把旧的 deepseek-chat 换成 deepseek-v4.1-flash；顺手把地址补成 /v1。 */
+/**
+ * DeepSeek 的模型 ID 跟版本号不是一回事：官方 API 只认 `deepseek-flash`（现在由
+ * DeepSeek-V4.1-Flash-1017 提供服务）和 `deepseek-v4-pro`。填 `deepseek-v4.1-flash`
+ * 这类"版本号当 ID"的写法会直接 400。这里把历史写法统一纠正，
+ * 顺手把 `api.deepseek.com`（无 /v1）补成 /v1，好跟种子合并成一条。
+ */
+const DEEPSEEK_ID_FIXES: Array<{ from: string[]; to: string; name: string }> = [
+  { from: ["deepseek-chat", "deepseek-v4.1-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"], to: "deepseek-flash", name: "DeepSeek V4.1 Flash" },
+  { from: ["deepseek-reasoner"], to: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+];
+
 export function migrateDeepSeekModelIds(): number {
   const now = Date.now();
-  const renamed = db()
-    .prepare("UPDATE models SET model_id = 'deepseek-v4.1-flash', name = 'DeepSeek V4.1 Flash', updated_at = ? WHERE model_id = 'deepseek-chat'")
-    .run(now);
+  let renamed = 0;
+  for (const fix of DEEPSEEK_ID_FIXES) {
+    for (const from of fix.from) {
+      const result = db()
+        .prepare("UPDATE models SET model_id = ?, name = ?, updated_at = ? WHERE model_id = ?")
+        .run(fix.to, fix.name, now, from);
+      renamed += Number(result.changes);
+    }
+  }
   // https://api.deepseek.com 和 .../v1 都通，但统一成 /v1 才能跟种子合并成一条
   const normalized = db()
     .prepare("UPDATE models SET base_url = 'https://api.deepseek.com/v1', updated_at = ? WHERE base_url IN ('https://api.deepseek.com', 'https://api.deepseek.com/')")
     .run(now);
-  let removed = 0;
-  const legacy = db()
-    .prepare("SELECT id FROM models WHERE model_id = 'deepseek-reasoner'")
-    .all() as Array<{ id: string }>;
-  for (const row of legacy) {
-    const bound = db().prepare("SELECT 1 AS ok FROM bindings WHERE model_id = ?").get(row.id);
-    if (bound || hasSecret(modelSecretName(row.id))) {
-      db().prepare("UPDATE models SET name = 'DeepSeek Reasoner（旧）', updated_at = ? WHERE id = ?").run(now, row.id);
-    } else {
-      db().prepare("DELETE FROM models WHERE id = ?").run(row.id);
-      removed += 1;
-    }
-  }
-  const total = Number(renamed.changes) + Number(normalized.changes) + removed;
+  const total = renamed + Number(normalized.changes);
   if (total > 0) {
-    console.log(
-      `[kivora] deepseek ids migrated: renamed=${renamed.changes} normalized=${normalized.changes} removed=${removed}`,
-    );
+    console.log(`[kivora] deepseek ids migrated: renamed=${renamed} normalized=${normalized.changes}`);
   }
   return total;
+}
+
+/**
+ * 音色不能用别的模型的：老版本引导页把音色写死成 `Cherry`，撞上 qwen-audio-3.1-tts-*
+ * 就会被服务以 InvalidParameter / 411 拒掉。这里把「不属于本模型、且我们有清单」的音色
+ * 换回该模型的默认音色；未知模型不动。
+ */
+export function repairTtsVoices(): number {
+  const rows = db()
+    .prepare("SELECT id, model_id, params FROM models WHERE capability = 'tts'")
+    .all() as Array<{ id: string; model_id: string; params: string }>;
+  let repaired = 0;
+  const now = Date.now();
+  for (const row of rows) {
+    const fallback = defaultVoiceFor(row.model_id);
+    if (!fallback) continue;
+    let params: Record<string, unknown>;
+    try {
+      params = JSON.parse(row.params) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const voice = typeof params.voice === "string" ? params.voice.trim() : "";
+    if (isKnownVoice(row.model_id, voice)) continue;
+    db()
+      .prepare("UPDATE models SET params = ?, updated_at = ? WHERE id = ?")
+      .run(JSON.stringify({ ...params, voice: fallback }), now, row.id);
+    console.log(`[kivora] voice fixed for ${row.model_id}: "${voice || "(empty)"}" → ${fallback}`);
+    repaired += 1;
+  }
+  return repaired;
 }
 /** 上一版把 Qwen 语音默认成了 HTTP 兼容端点；这里把这两条纠正成 WebSocket。 */
 export function migrateLegacyVoiceSeeds(): number {
@@ -324,7 +358,7 @@ export function seedModels(): void {
       provider: "openai",
       capability: "chat",
       baseUrl: "https://api.deepseek.com/v1",
-      modelId: "deepseek-v4.1-flash",
+      modelId: "deepseek-flash",
       params: { ...DEFAULT_PARAMS },
       headers: [],
     },

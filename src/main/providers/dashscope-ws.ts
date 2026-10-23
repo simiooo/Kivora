@@ -27,6 +27,7 @@ export function buildTtsStart(
   voice: string,
   format: string,
   sampleRate: number,
+  rate = 1,
 ): TaskEnvelope {
   return {
     header: { action: "run-task", task_id: taskId, streaming: "duplex" },
@@ -41,7 +42,7 @@ export function buildTtsStart(
         volume: 50,
         text_type: "PlainText",
         sample_rate: sampleRate,
-        rate: 1.0,
+        rate,
         format,
         pitch: 1.0,
         seed: 0,
@@ -189,12 +190,32 @@ function describeFailure(frame: EventFrame): string {
   return frame.header?.error_message ?? frame.header?.error_code ?? "语音任务失败";
 }
 
+/**
+ * 官方文档里写明：音色必须属于当前模型，跨模型混用时服务返回
+ * `InvalidParameter`，形如 `[cosyvoice]Engine error [411]: TTS speak operation failed`。
+ * 这个报错本身完全看不出问题是音色，所以这里翻译成人话，并把原始报文留在 detail。
+ */
+function ttsFailure(frame: EventFrame, model: string, voice: string): AppError {
+  const raw = describeFailure(frame);
+  const code = frame.header?.error_code ?? "";
+  const looksLikeVoice = /\[(411|418)\]/.test(raw) || /voice/i.test(raw);
+  if (looksLikeVoice || code === "InvalidParameter") {
+    return new AppError("invalid_input", {
+      message: `音色「${voice}」不属于模型「${model}」，音色不能跨模型混用。换一个这个模型自己的音色再试。`,
+      detail: raw,
+    });
+  }
+  return new AppError("upstream_error", { message: raw, detail: JSON.stringify(frame.header ?? {}) });
+}
+
 export interface TtsRequest {
   url: string;
   apiKey: string;
   model: string;
   text: string;
   voice?: string | null;
+  /** 语速 0.5–2.0，映射到协议里的 rate */
+  speed?: number | null;
   format?: "mp3" | "wav" | "pcm" | "opus";
   sampleRate?: number;
   timeoutMs?: number;
@@ -206,6 +227,7 @@ export async function synthesizeViaWebSocket(request: TtsRequest): Promise<{ aud
   const format = request.format ?? "mp3";
   const sampleRate = request.sampleRate ?? DEFAULT_TTS_SAMPLE_RATE;
   const voice = request.voice || DEFAULT_TTS_VOICE;
+  const speed = typeof request.speed === "number" && Number.isFinite(request.speed) ? Math.min(2, Math.max(0.5, request.speed)) : 1;
   const { socket, close } = await connect(request.url, request.apiKey, request.timeoutMs ?? 20_000);
 
   return await new Promise((resolve, reject) => {
@@ -249,7 +271,7 @@ export async function synthesizeViaWebSocket(request: TtsRequest): Promise<{ aud
         return;
       }
       if (event === "task-failed") {
-        finish(new AppError("upstream_error", { message: describeFailure(frame as EventFrame), detail: JSON.stringify(frame?.header ?? {}) }));
+        finish(ttsFailure(frame as EventFrame, request.model, voice));
         return;
       }
       if (event === "task-finished") finish();
@@ -258,7 +280,7 @@ export async function synthesizeViaWebSocket(request: TtsRequest): Promise<{ aud
     socket.on("close", () => finish());
     socket.on("error", (err) => finish(new AppError("unreachable", { message: "语音服务连接中断。", detail: err instanceof Error ? err.message : String(err) })));
 
-    send(buildTtsStart(id, request.model, voice, format, sampleRate));
+    send(buildTtsStart(id, request.model, voice, format, sampleRate, speed));
   });
 }
 

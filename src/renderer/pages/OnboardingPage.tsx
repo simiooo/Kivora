@@ -4,6 +4,7 @@ import type { Bootstrap } from "@shared/ipc.ts";
 import type { AppConfig, ModelRecord } from "@shared/domain.ts";
 import { formatHotkey } from "@shared/text.ts";
 import { DEFAULT_PARAMS } from "@shared/domain.ts";
+import { defaultVoiceFor } from "@shared/voice-catalog.ts";
 import { bridge, toUiError } from "../lib/bridge.ts";
 import { Recorder, listMics, type MicDevice } from "../lib/audio.ts";
 import { cn } from "../lib/utils.ts";
@@ -147,7 +148,7 @@ function ConnectStep({
 }): React.JSX.Element {
   const toast = useToast();
   const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com/v1");
-  const [modelId, setModelId] = useState("deepseek-v4.1-flash");
+  const [modelId, setModelId] = useState("deepseek-flash");
   const [apiKey, setApiKey] = useState("");
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
@@ -200,7 +201,8 @@ function ConnectStep({
         ...DEFAULT_PARAMS,
         temperature: null,
         maxTokens: null,
-        voice: "Cherry",
+        // 音色跟模型绑定，用清单里的默认值（写死别的模型的音色会被服务拒绝）
+        voice: defaultVoiceFor(ttsId),
         speed: 1,
       });
       const [asrResult, ttsResult] = await Promise.all([bridge.testModel(asr.id), bridge.testModel(tts.id)]);
@@ -256,13 +258,14 @@ function ConnectStep({
       });
       const testResult = await bridge.testModel(saved.id);
       const real = testResult.ok && !testResult.simulated;
+      const failure = testResult.error;
       setResult({
         ok: real,
         text: real
           ? `连接正常 · ${testResult.latencyMs}ms`
           : testResult.ok
             ? "模拟通过：没填 Key，不会真的发请求，所以也不会绑上去"
-            : (testResult.error?.message ?? "连接失败"),
+            : `${failure?.message ?? "连接失败"}${failure?.detail ? `（${failure.detail.split("\n")[0]}）` : ""}`,
       });
       if (real) {
         // 真连上了才绑定：调度和任务共用这个模型，否则任务会话还在用种子模型
@@ -284,7 +287,7 @@ function ConnectStep({
 
   return (
     <div>
-      <Field label="Base URL" hint="OpenAI 兼容端点，留到 /v1 这一级。">
+      <Field label="Base URL" hint="OpenAI 兼容端点根地址，通常以 /v1 结尾；有的厂商直接给域名。">
         <Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} spellCheck={false} />
       </Field>
       <Field label="模型 ID">
@@ -351,6 +354,11 @@ function ConnectStep({
                 <Input value={ttsId} onChange={(event) => setTtsId(event.target.value)} spellCheck={false} />
               </Field>
             </div>
+            {defaultVoiceFor(ttsId) ? (
+              <p className="-mt-2 mb-4 text-[11px] leading-5 text-faint">
+                默认音色 {defaultVoiceFor(ttsId)}，之后可在设置 → 模型里换（音色必须属于这个模型）。
+              </p>
+            ) : null}
 
             <div className="flex items-center gap-3">
               <Button variant="secondary" onClick={() => void connectVoice()} disabled={voiceBusy}>

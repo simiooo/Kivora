@@ -161,6 +161,7 @@ export async function synthesizeSpeech(text: string): Promise<SpeechClip> {
             model: model.modelId,
             text: trimmed,
             voice: model.params.voice,
+            speed: model.params.speed,
           })
         : await synthesize(model, apiKey, trimmed);
     const base64 = toBase64(result.audio);
