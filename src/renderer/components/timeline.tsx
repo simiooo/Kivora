@@ -96,7 +96,7 @@ export function MessageRow({
             onClick={onRetryVoice}
             className="ml-auto text-[12px] text-acorn hover:underline"
           >
-            按住热键重说
+            按热键重说
           </button>
         </div>
       ) : null}

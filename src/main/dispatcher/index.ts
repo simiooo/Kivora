@@ -20,11 +20,11 @@ import { cancelRun, isRunning, pickScenario, startTask } from "./runner.ts";
 import { cancelPiRun, isPiRunning, steerPiRun } from "./pi-runner.ts";
 import { mockMode, piAvailable } from "../env.ts";
 import { beginTurn, isCurrentTurn, setThinking } from "../turn-state.ts";
-import { acknowledgmentFor } from "./ack.ts";
+import { acknowledgmentFor, isQuestion, looksActionable } from "./ack.ts";
 import { broadcast, speak } from "../bus.ts";
 import { getConfig } from "../repos/config.ts";
 import { getBoundModel } from "../repos/models.ts";
-import { classify } from "./brain.ts";
+import { classify, type BrainDecision } from "./brain.ts";
 import { getSecret, modelSecretName } from "../secrets.ts";
 import { AppError } from "../../shared/errors.ts";
 import { tailEllipsis } from "../../shared/text.ts";
@@ -138,11 +138,7 @@ export function pump(): void {
   }
 }
 
-async function brainDecision(
-  text: string,
-  context: string,
-  signal?: AbortSignal,
-): Promise<{ action: string; title?: string; speech?: string } | null> {
+async function brainDecision(text: string, context: string, signal?: AbortSignal): Promise<BrainDecision | null> {
   if (mockMode()) return null;
   const model = getBoundModel("brain");
   if (!model) return null;
@@ -195,20 +191,36 @@ export async function handleUtterance(
 
   const context = buildContext();
   let intent = route(raw, context);
+  let decision: BrainDecision | null = null;
 
-  // 反射没命中"建任务"之外的动作时，给 brain 一次机会（4s 超时，失败就按字面做）
-  if (intent.kind === "create_task" && context.running) {
-    const decision = await think(() => brainDecision(raw, describeContext(context), ticket.signal));
+  // 反射只想"建任务"时，先问一次调度模型：它可能只是问个问题，不该开任务
+  if (intent.kind === "create_task") {
+    decision = await think(() => brainDecision(raw, describeContext(context), ticket.signal));
     if (!isCurrentTurn(ticket.seq)) {
       return { messages: turn.messages, action: { kind: "none" }, spoken: null };
     }
-    if (decision) {
+
+    // 只是问一件事：直接答，不建会话（否则会掉进"这条指令需要浏览器"）
+    if (decision?.action === "answer") {
+      const text = decision.speech?.trim() || decision.question?.trim() || "这个我暂时答不上来。";
+      say(turn, text);
+      return { messages: turn.messages, action: { kind: "none" }, spoken: text };
+    }
+
+    if (decision && context.running) {
       if (decision.action === "status") intent = { kind: "status", sessionId: context.running.id };
       else if (decision.action === "cancel") intent = { kind: "cancel", sessionId: context.running.id };
       else if (decision.action === "promote") intent = { kind: "promote" };
       else if (decision.action === "queue" || decision.action === "steer") {
         intent = { kind: "queue", sessionId: context.running.id, text: raw };
       }
+    }
+
+    // 没有可用的调度模型，但这句明显是个问题：别装模作样开任务
+    if (!decision && isQuestion(raw) && !looksActionable(raw)) {
+      const text = "这个问题得靠模型来答，现在还没连上可用的调度模型——去设置 → 模型里配一个。";
+      say(turn, text);
+      return { messages: turn.messages, action: { kind: "none" }, spoken: text };
     }
   }
 
@@ -382,16 +394,11 @@ export async function handleUtterance(
 
       const scenario = pickScenario(intent.text);
       let finalTitle = title;
-      if (!mockMode()) {
-        const decision = await think(() => brainDecision(intent.text, "没有正在跑的任务", ticket.signal));
-        if (!isCurrentTurn(ticket.seq)) {
-          return { messages: turn.messages, action: { kind: "none" }, spoken: null };
-        }
-        if (decision?.speech) scenario.narration = decision.speech;
-        if (decision?.title) {
-          finalTitle = decision.title;
-          renameSession(session.id, finalTitle);
-        }
+      // 上面已经问过调度模型了（包括"只是问问题"的情况），这里不再问第二次
+      if (decision?.speech) scenario.narration = decision.speech;
+      if (decision?.title) {
+        finalTitle = decision.title;
+        renameSession(session.id, finalTitle);
       }
       say(turn, scenario.narration, { sessionId: session.id });
       launch(session.id);

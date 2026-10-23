@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { ackKindOf, acknowledgmentFor, resetAckCursor } from "./ack.ts";
+import { ackKindOf, acknowledgmentFor, isQuestion, looksActionable, resetAckCursor } from "./ack.ts";
 
 beforeEach(() => resetAckCursor());
 
@@ -19,6 +19,18 @@ describe("接话的意图粗分", () => {
   it("剩下的一律当没听明白", () => {
     expect(ackKindOf("那个")).toBe("unclear");
     expect(ackKindOf("嗯")).toBe("unclear");
+  });
+
+  it("能区分「只是在问」和「要动手」", () => {
+    expect(isQuestion("今天星期几？")).toBe(true);
+    expect(looksActionable("今天星期几？")).toBe(false);
+
+    expect(isQuestion("把下载目录的 pdf 挪走")).toBe(false);
+    expect(looksActionable("把下载目录的 pdf 挪走")).toBe(true);
+
+    // 带问号但确实要动手：两边都成立，判成任务优先级更高
+    expect(isQuestion("能不能把这些发票挪到文档？")).toBe(true);
+    expect(looksActionable("能不能把这些发票挪到文档？")).toBe(true);
   });
 });
 

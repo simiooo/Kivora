@@ -7,19 +7,24 @@ import { chatCompletion } from "../providers/llm.ts";
  */
 
 export interface BrainDecision {
-  action: "create_task" | "status" | "cancel" | "queue" | "steer" | "promote" | "retry" | "clarify";
+  action: "create_task" | "answer" | "status" | "cancel" | "queue" | "steer" | "promote" | "retry" | "clarify";
   title?: string;
   speech?: string;
   question?: string;
 }
 
 const SYSTEM = [
-  "你是 Kivora 的语音调度层。你只做一件事：把用户的一句话判成一个动作。",
-  "可选动作：create_task（开新任务）、status（查进度）、cancel（停止）、queue（追加到当前会话）、promote（插队）、retry（重试）、clarify（需要问一句）。",
+  "你是 Kivora 的语音调度层。你把用户的一句话判成一个动作，并给出要说的话。",
+  "可选动作：",
+  "- answer：用户只是在问一件事（时间、常识、刚才的情况），不需要动文件或电脑。答案放 speech。",
+  "- create_task：需要实际动手（整理文件、搜索、读消息…）。title 是任务名。",
+  "- status / cancel / queue / promote / retry：针对正在跑或刚跑完的会话。",
+  "- clarify：信息不够，需要反问一句，问题放 question。",
   "要求：",
-  "1. 只输出 JSON，形如 {\"action\":\"create_task\",\"title\":\"整理发票\",\"speech\":\"好，我去整理。\"}",
-  "2. title ≤ 12 个汉字，是任务名；speech ≤ 15 个汉字，是马上要说出的话。",
-  "3. 不要解释，不要 markdown。",
+  "1. 只输出 JSON，形如 {\"action\":\"answer\",\"speech\":\"今天是 10 月 24 日，星期六。\"}",
+  "2. answer 的 speech ≤ 40 个汉字，直接说结论，不要解释过程；不确定就说不知道。",
+  "3. create_task 的 title ≤ 12 个汉字，speech ≤ 15 个汉字（马上要说的话）。",
+  "4. 不要 markdown，不要多余文字。",
 ].join("\n");
 
 function stripToJson(text: string): string {
@@ -40,25 +45,27 @@ export async function classify(
   const onAbort = (): void => controller.abort();
   signal?.addEventListener("abort", onAbort, { once: true });
   const timer = setTimeout(() => controller.abort(), 4000);
+  // 模型不知道今天几号，把它当前的真实时间一起给它
+  const now = new Date().toLocaleString("zh-CN", { hour12: false, weekday: "long" });
   try {
     const result = await chatCompletion(
       model,
       apiKey,
       [
         { role: "system", content: SYSTEM },
-        { role: "user", content: `当前上下文：${context}\n用户说：${text}` },
+        { role: "user", content: `现在是 ${now}。\n当前上下文：${context}\n用户说：${text}` },
       ],
-      { maxTokens: 120, temperature: 0, signal: controller.signal },
+      { maxTokens: 160, temperature: 0, signal: controller.signal },
     );
     const json = stripToJson(result.text);
     if (!json) return null;
     const parsed = JSON.parse(json) as Partial<BrainDecision>;
-    const allowed = ["create_task", "status", "cancel", "queue", "steer", "promote", "retry", "clarify"];
+    const allowed = ["answer", "create_task", "status", "cancel", "queue", "steer", "promote", "retry", "clarify"];
     if (!parsed.action || !allowed.includes(parsed.action)) return null;
     return {
       action: parsed.action,
       title: typeof parsed.title === "string" ? parsed.title.slice(0, 24) : undefined,
-      speech: typeof parsed.speech === "string" ? parsed.speech.slice(0, 40) : undefined,
+      speech: typeof parsed.speech === "string" ? parsed.speech.slice(0, 120) : undefined,
       question: typeof parsed.question === "string" ? parsed.question.slice(0, 40) : undefined,
     };
   } catch (err) {

@@ -26,6 +26,16 @@ export function ackKindOf(text: string): AckKind {
   return "unclear";
 }
 
+/** 这句像不像在问问题（用来决定"该答"还是"该干活"） */
+export function isQuestion(text: string): boolean {
+  return QUESTION.test(text.trim());
+}
+
+/** 有没有明确的动作词——有问题但也要动手的句子，仍然按任务走 */
+export function looksActionable(text: string): boolean {
+  return ACTION.test(text.trim());
+}
+
 let cursor = 0;
 
 /** 轮着用几种说法，避免每次都一模一样；短语固定，TTS 缓存能复用 */

@@ -12,6 +12,7 @@
 | 设计项 | 出处 | 实现 | 验证 |
 |---|---|---|---|
 | 语音层只调度，任务在独立会话跑 | squent 2.2 / 3.1 | `dispatcher/index.ts` `handleUtterance` → `createSession` → `runner` | flow 1–3 |
+| **问答通路：不是每句都开任务** | squent 3.1（"判别"） | `brain.ts` 新增 `answer` 动作；`dispatcher` 在 `create_task` 之前先判别，问句直接回话、不建会话、不进执行器。模型提示词里带当前日期 | ack.test（问题/动作区分）、手动 |
 | 反射路由优先，模型只做判别 | squent 3.1 | `dispatcher/router.ts`（零模型） | router.test |
 | 排队 / 插话 / 抢占 | squent 3.6 | `repos/queue.ts` + `pump()` | flow 6–8 |
 | 审批总线（会话 / Pi / 权限三来源） | squent 4 | `dispatcher/approval-bus.ts`、`resources/kivora-permission.ts` | flow |
@@ -38,6 +39,7 @@
 | **6 层上下文栈 + 稳定前缀 ≥80% 命中** | voice 2.3 | brain 只带一句 `describeContext()`；Pi 会话自带上下文 | 影响的是成本不是功能，优先级低 |
 | **L2/L3 实时通道 ≤3%** | voice 0 | 未接入实时 ASR；TTS 是整段合成 | 同上，属于成本优化 |
 | **"只听不记"（不写 transcript）** | voice 1.2 | 没有：转录都会写库 | 加一个 `privateMode` 开关，写库前丢弃文本 |
+| **执行器覆盖面** | squent 1.1（三条黄金路径） | 内置执行器只认文件整理；搜索/读消息要靠 Pi 会话。没配 Pi 时其它指令只能如实失败 | 失败文案已改成"说明现在能做什么"，覆盖面靠 Pi + MCP 补齐 |
 | **语音改配置（§3.11）** | squent 3.11 | 没有：说"换个男声"不会改配置 | 反射路由加几条：音色/语言/热键，热键走审批 |
 | **取景框 / 虚拟光标 / 4 类轻提示** | voice 0 / 1 | 未做（overlay 只有胶囊 + 卡片） | 需要 MCP/桌面控制先到位 |
 
