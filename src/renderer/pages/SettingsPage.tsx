@@ -7,6 +7,7 @@ import { displayPath, formatHotkey, formatRelative, formatTime } from "@shared/t
 import { bridge, toUiError } from "../lib/bridge.ts";
 import { useLiveData } from "../lib/hooks.ts";
 import { cn } from "../lib/utils.ts";
+import { HotkeyInput } from "../components/hotkey-input.tsx";
 import { Button, Chip, Dot, Empty, Field, Input, SectionLabel, Spinner, ToggleRow, useToast } from "../components/ui.tsx";
 import { ModelsPanel } from "../components/models-panel.tsx";
 
@@ -194,12 +195,7 @@ function GeneralSection({
           </Button>
         }
       >
-        <Input
-          value={formatHotkey(hotkey)}
-          onChange={(event) => setHotkey(event.target.value)}
-          className="font-mono text-[13px]"
-          spellCheck={false}
-        />
+        <HotkeyInput value={hotkey} onChange={setHotkey} />
       </Field>
 
       <Field

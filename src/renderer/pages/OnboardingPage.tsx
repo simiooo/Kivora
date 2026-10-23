@@ -8,6 +8,7 @@ import { bridge, toUiError } from "../lib/bridge.ts";
 import { Recorder, listMics, type MicDevice } from "../lib/audio.ts";
 import { cn } from "../lib/utils.ts";
 import { Button, Chip, Field, Input, Spinner, Switch, useToast } from "../components/ui.tsx";
+import { HotkeyInput } from "../components/hotkey-input.tsx";
 
 const STEPS = [
   { title: "连接模型", hint: "至少配一个能说话的模型，否则它只能按字面做事。" },
@@ -307,12 +308,7 @@ function MicStep({
 
       <Field label="唤醒热键" hint="冲突时会提示换一个。">
         <div className="flex gap-2">
-          <Input
-            value={formatHotkey(accelerator)}
-            onChange={(event) => setAccelerator(event.target.value)}
-            className="font-mono text-[13px]"
-            spellCheck={false}
-          />
+          <HotkeyInput value={accelerator} onChange={setAccelerator} />
           <Button
             variant="secondary"
             onClick={() => {

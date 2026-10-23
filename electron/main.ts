@@ -26,6 +26,7 @@ import { setBroadcastHook } from "../src/main/bus.ts";
 import { answerById, expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
 import { stopAllPiRuns } from "../src/main/dispatcher/pi-runner.ts";
 import { appendMessage, countSessions, listActiveSessions, listSessions } from "../src/main/repos/sessions.ts";
+import { formatHotkey } from "../src/shared/text.ts";
 import { pendingApprovals } from "../src/main/repos/approvals.ts";
 import { seedDemoData } from "../src/main/demo.ts";
 import { MCP_PRESETS, saveServer } from "../src/main/mcp.ts";
@@ -82,8 +83,8 @@ function registerHotkey(accelerator: string): { ok: boolean; hotkey: string } {
   if (!ok) {
     console.warn(`[kivora] hotkey not registered: ${accelerator}`);
     // 注册失败时回退到默认热键，避免完全叫不醒
-    if (accelerator !== "CommandOrControl+Alt+Space") {
-      const fallback = registerHotkey("CommandOrControl+Alt+Space");
+    if (accelerator !== "Control+Alt+K") {
+      const fallback = registerHotkey("Control+Alt+K");
       if (fallback.ok) setConfig({ hotkey: fallback.hotkey });
     }
   }
@@ -303,7 +304,7 @@ app.whenReady().then(async () => {
   if (countSessions() === 0 && !isSmoke) {
     appendMessage({
       role: "assistant",
-      content: "我是 Kivora。按 Ctrl+Alt+Space 说一句话，我会开独立会话去把事做完。现在跑的是 mock 端点。",
+      content: `我是 Kivora。按 ${formatHotkey(getConfig().hotkey)} 说一句话，我会开独立会话去把事做完。现在跑的是演练模式。`,
     });
   }
 
