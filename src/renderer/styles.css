@@ -335,6 +335,16 @@
   animation: kivora-capsule-out var(--motion-fast) var(--ease-in) both;
 }
 
+/* 无边框窗口的拖拽区：Electron 只认 -webkit-app-region，
+   React 的内联 WebkitAppRegion 不一定落到 CSS 上，所以统一用类。 */
+.drag-region {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .motion-rise,
   .motion-pop,

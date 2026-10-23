@@ -101,12 +101,12 @@ export function HistoryPage({
     <div className="flex h-full bg-background">
       <aside className="flex w-[300px] shrink-0 flex-col border-r border-border/60">
         <header
-          className="flex h-12 items-center gap-2 pr-4 pl-6"
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+          className="drag-region flex h-12 items-center gap-2 pr-4 pl-6"
+          data-drag="1"
         >
           <span className="size-2 rounded-full bg-acorn" />
           <span className="text-[13px] font-medium">Kivora</span>
-          <div className="ml-auto" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+          <div className="no-drag ml-auto">
             <IconButton label="新建会话" onClick={() => navigate("/")}>
               <Plus className="size-4" />
             </IconButton>

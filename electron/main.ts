@@ -196,6 +196,12 @@ async function runShots(): Promise<void> {
     await capture(win, file);
   }
 
+  // 拖拽区是否真的落到了 CSS 上（Electron 只认 -webkit-app-region）
+  const dragRegion = await win.webContents.executeJavaScript(
+    `(() => { const el = document.querySelector("[data-drag='1']"); if (!el) return null; const s = getComputedStyle(el); return s.getPropertyValue("-webkit-app-region") || s.webkitAppRegion || null; })()`,
+  );
+  console.log(`[kivora] drag region=${JSON.stringify(dragRegion)}`);
+
   // 阅读器的退场：点开再关，采样过渡期间的不透明度
   await loadRoute(win, "");
   await wait(600);

@@ -41,8 +41,8 @@ export function SettingsPage({
     <div className="flex h-full bg-background">
       <aside className="flex w-[300px] shrink-0 flex-col border-r border-border/60">
         <header
-          className="flex h-12 items-center gap-2 px-6"
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+          className="drag-region flex h-12 items-center gap-2 px-6"
+          data-drag="1"
         >
           <span className="size-2 rounded-full bg-acorn" />
           <span className="text-[13px] font-medium">Kivora</span>

@@ -31,8 +31,11 @@ export function OnboardingPage({
   const [busy, setBusy] = useState(false);
 
   return (
-    <div className="flex h-full bg-background">
-      <aside className="flex w-[340px] shrink-0 flex-col border-r border-border/60 px-8 py-8">
+    <div className="flex h-full flex-col bg-background">
+      {/* 引导页没有自己的标题栏，留一条整宽的拖拽带 */}
+      <div className="drag-region h-9 w-full shrink-0" data-drag="1" />
+      <div className="flex min-h-0 flex-1">
+      <aside className="flex w-[340px] shrink-0 flex-col border-r border-border/60 px-8 pb-8">
         <div className="mb-10 flex items-center gap-2">
           <span className="size-2 rounded-full bg-acorn" />
           <span className="text-[13px] font-medium">Kivora</span>
@@ -128,6 +131,7 @@ export function OnboardingPage({
           </div>
         </div>
       </main>
+      </div>
     </div>
   );
 }

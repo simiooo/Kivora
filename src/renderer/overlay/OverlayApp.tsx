@@ -98,7 +98,7 @@ export function OverlayApp(): React.JSX.Element | null {
           capsule.mounted ? "motion-rise" : "",
         )}
       >
-        <div className="mb-3 flex items-center gap-2">
+        <div className="drag-region mb-3 flex items-center gap-2" data-drag="1">
           <span className="size-2 rounded-full bg-acorn" />
           <span className="text-[15px] font-medium">Kivora</span>
           <span className="ml-auto text-[11px] text-faint">
@@ -131,7 +131,7 @@ export function OverlayApp(): React.JSX.Element | null {
           ) : null}
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
+        <div className="no-drag mt-4 flex items-center gap-2">
           <button
             type="button"
             onClick={() => void bridge.overlayAsk()}

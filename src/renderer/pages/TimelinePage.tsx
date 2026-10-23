@@ -116,8 +116,8 @@ export function TimelinePage({
   return (
     <div className="flex h-full flex-col bg-background">
       <header
-        className="flex h-12 shrink-0 items-center gap-2.5 pr-[152px] pl-6"
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+        className="drag-region flex h-12 shrink-0 items-center gap-2.5 pr-[152px] pl-6"
+        data-drag="1"
       >
         <Dot tone={listening ? "acorn" : running ? "acorn" : "faint"} pulse={listening || Boolean(running)} />
         <span className="text-[13px] font-medium tracking-tight">Kivora</span>
@@ -125,10 +125,7 @@ export function TimelinePage({
           {listening ? "在听" : running ? `在想 · ${running.title}` : "待命"}
         </span>
 
-        <div
-          className="ml-auto flex items-center gap-2"
-          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-        >
+        <div className="no-drag ml-auto flex items-center gap-2">
           {bootstrap.config.mockMode ? <Chip tone="muted">mock</Chip> : null}
           <Chip tone="muted" className="font-mono">
             {formatHotkey(bootstrap.config.hotkey)}
