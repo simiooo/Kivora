@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from "electron";
+import { BrowserWindow, Menu, Tray, app, nativeImage, screen } from "electron";
 import path from "node:path";
 import { IPC } from "../shared/ipc.ts";
 import { pendingApprovals } from "./repos/approvals.ts";
@@ -6,10 +6,11 @@ import { getConfig } from "./repos/config.ts";
 import { appIcon } from "./paths.ts";
 
 /**
- * 三个窗口：
+ * 三个窗口 + 一个托盘：
  * - main：时间线 / 历史 / 设置（一个 React 应用，内部路由）
  * - overlay：桌面常驻胶囊 + 最近上下文（画板 06）
  * - permission：权限浮窗（画板 09），只用来看和点，不抢焦点
+ * - tray：常驻入口；关主窗不退出（可在设置里关掉）
  */
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -18,6 +19,9 @@ const preloadFile = path.join(__dirname, "preload.cjs");
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
 let permissionWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let quitting = false;
+let trayStatus = "待命";
 
 function rendererFile(name: string): string {
   return path.join(__dirname, "..", "dist", name);
@@ -67,6 +71,13 @@ export function createMainWindow(): BrowserWindow {
   });
 
   mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.on("close", (event) => {
+    // 关主窗 = 收进托盘，而不是退出；真的退出走托盘菜单或 app.quit()
+    if (!quitting && getConfig().closeToTray) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -196,6 +207,65 @@ export function focusMain(): void {
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+}
+
+/* ------------------------------------------------------------- 托盘 */
+
+export function isQuitting(): boolean {
+  return quitting;
+}
+
+export function markQuitting(): void {
+  quitting = true;
+}
+
+function rebuildTrayMenu(): void {
+  if (!tray) return;
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: `Kivora · ${trayStatus}`, enabled: false },
+      { type: "separator" },
+      { label: "打开主窗", click: () => focusMain() },
+      {
+        label: "说一句",
+        click: () => {
+          focusMain();
+          mainWindow?.webContents.send(IPC.hotkeyPressed);
+        },
+      },
+      { label: overlayIsVisible() ? "收起悬浮窗" : "显示悬浮窗", click: () => (overlayIsVisible() ? hideOverlay() : showOverlay()) },
+      { type: "separator" },
+      {
+        label: "退出 Kivora",
+        click: () => {
+          quitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+}
+
+export function createTray(): void {
+  if (tray) return;
+  const image = nativeImage.createFromPath(appIcon());
+  tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
+  tray.setToolTip("Kivora · 待命");
+  tray.on("double-click", () => focusMain());
+  tray.on("click", () => rebuildTrayMenu());
+  rebuildTrayMenu();
+}
+
+export function updateTrayStatus(status: string): void {
+  trayStatus = status;
+  if (!tray) return;
+  tray.setToolTip(`Kivora · ${status}`);
+  rebuildTrayMenu();
+}
+
+export function destroyTray(): void {
+  tray?.destroy();
+  tray = null;
 }
 
 export function broadcastToOverlay(payload: unknown): void {

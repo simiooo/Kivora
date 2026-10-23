@@ -9,18 +9,23 @@ import { getConfig, setConfig } from "../src/main/repos/config.ts";
 import { initPi } from "../src/main/env.ts";
 import {
   createMainWindow,
+  createTray,
+  destroyTray,
   focusMain,
   getMainWindow,
   getOverlayWindow,
   getPermissionWindow,
   hideOverlay,
+  markQuitting,
   refreshPermissionWindow,
   showOverlay,
+  updateTrayStatus,
 } from "../src/main/windows.ts";
 import { markListening, normalizeAccelerator, registerIpc } from "../src/main/ipc.ts";
 import { setBroadcastHook } from "../src/main/bus.ts";
 import { expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
-import { appendMessage, countSessions, listSessions } from "../src/main/repos/sessions.ts";
+import { appendMessage, countSessions, listActiveSessions, listSessions } from "../src/main/repos/sessions.ts";
+import { pendingApprovals } from "../src/main/repos/approvals.ts";
 import { seedDemoData } from "../src/main/demo.ts";
 import { MCP_PRESETS, saveServer } from "../src/main/mcp.ts";
 
@@ -237,8 +242,17 @@ app.whenReady().then(async () => {
     return;
   }
 
+  let trayTimer: NodeJS.Timeout | null = null;
   setBroadcastHook((kind) => {
     if (kind === "approvals") refreshPermissionWindow();
+    if (kind === "sessions" || kind === "approvals" || kind === "queue") {
+      if (trayTimer) clearTimeout(trayTimer);
+      trayTimer = setTimeout(() => {
+        const active = listActiveSessions().length;
+        const pending = pendingApprovals().length;
+        updateTrayStatus(pending ? `${pending} 个待确认` : active ? `${active} 个任务在跑` : "待命");
+      }, 400);
+    }
   });
 
   registerIpc({
@@ -252,6 +266,7 @@ app.whenReady().then(async () => {
   app.setLoginItemSettings({ openAtLogin: getConfig().launchAtLogin });
   registerHotkey(hotkey);
   createMainWindow();
+  createTray();
 
   if (getConfig().onboardingDone) showOverlay();
 
@@ -286,10 +301,16 @@ if (!gotLock) {
 }
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  // 常驻模式：主窗只是收进托盘，不退出
+  if (process.platform !== "darwin" && !getConfig().closeToTray) app.quit();
+});
+
+app.on("before-quit", () => {
+  markQuitting();
 });
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  destroyTray();
   closeStore();
 });

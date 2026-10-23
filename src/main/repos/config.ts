@@ -14,6 +14,7 @@ export const CONFIG_DEFAULTS: AppConfig = {
   g3Voice: false,
   retentionDays: 7,
   launchAtLogin: false,
+  closeToTray: true,
   mediaRoots: [],
 };
 

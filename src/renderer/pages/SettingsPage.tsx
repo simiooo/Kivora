@@ -262,6 +262,12 @@ function GeneralSection({
           checked={bootstrap.config.launchAtLogin}
           onChange={(value) => void patch({ launchAtLogin: value })}
         />
+        <ToggleRow
+          title="关窗后留在托盘"
+          description="关主窗只是收起来，热键和任务继续跑；真正退出用托盘菜单。"
+          checked={bootstrap.config.closeToTray}
+          onChange={(value) => void patch({ closeToTray: value })}
+        />
       </Card>
 
       <Field label="本地保留" hint="事件和审计只留这么多天，消息不删。">

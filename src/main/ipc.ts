@@ -106,6 +106,7 @@ const configPatchSchema = z.object({
   g3Voice: z.boolean().optional(),
   retentionDays: z.number().int().min(1).max(90).optional(),
   launchAtLogin: z.boolean().optional(),
+  closeToTray: z.boolean().optional(),
   mediaRoots: z.array(z.string().max(300)).max(10).optional(),
 });
 

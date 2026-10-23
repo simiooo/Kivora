@@ -331,6 +331,8 @@ export interface AppConfig {
   /** 时间线保留天数（事件清理） */
   retentionDays: number;
   launchAtLogin: boolean;
+  /** 关主窗时收进托盘，而不是退出 */
+  closeToTray: boolean;
   mediaRoots: string[];
 }
 
