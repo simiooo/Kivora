@@ -195,6 +195,17 @@ export function approvalTimeoutMs(risk: Risk): number | null {
   return null;
 }
 
+/**
+ * 用户设置里的"多久没回答算拒绝"不能突破风险等级的天花板：
+ * 填 300 秒也不会让 G2 等过 60 秒。
+ */
+export function effectiveApprovalTimeoutMs(risk: Risk, userSeconds: number): number | null {
+  const cap = approvalTimeoutMs(risk);
+  if (cap === null) return null;
+  const wanted = Math.max(10, Math.min(300, Math.round(userSeconds))) * 1000;
+  return Math.min(cap, wanted);
+}
+
 export interface Grant {
   id: string;
   sessionId: string | null;

@@ -32,7 +32,7 @@
 | 权限浮窗 | ✅ | 右下角、不抢焦点、倒计时、三个按钮语义固定 |
 | 会话历史 | ✅ | 搜索、事件流、对话、导出 Markdown、删除 |
 | 引导 | ✅ | 三步：连模型 / 麦克风与热键 / 完成 |
-| 浏览器 / 桌面控制 | ✅ 走 Pi 的 MCP | 设置 → 扩展里一键加 cua-driver / Playwright MCP；需要 pi 1.4.0+，动作类工具会先问你 |
+| 浏览器 / 桌面控制 | ✅ 走 Pi 的 MCP | 设置 → 扩展里一键加 cua-driver / Playwright MCP；pi 随应用发布，动作类工具会先问你 |
 | Pi 会话执行 | ✅ 可选 | 设置里切「Pi 会话」后，任务走 `pi --mode rpc`；工具调用经 Kivora 权限扩展进审批总线；支持插话、排队、手动压缩 |
 
 ## 装上试
@@ -49,6 +49,8 @@ pnpm dist:dir    # 只出免安装目录 release/win-unpacked/
 ```
 
 安装包要求 Windows 10/11 x64；数据在 `%APPDATA%\kivora`，卸载不会删。
+
+**不需要装全局 pi**：`@earendil-works/pi-coding-agent@1.4.0` 是项目依赖，随安装包发布，用应用自带的 Electron 当 Node 跑（asar 里也能读）。
 
 > 本机排查小贴士：如果环境里设置了 `ELECTRON_RUN_AS_NODE=1`（有些 Node 工具链会设），
 > 打包后的 exe 会以纯 Node 模式启动并报 `bad option`。`pnpm start` / `pnpm dev` 会自动清掉它。
@@ -126,7 +128,7 @@ Windows 凭据管理器（DPAPI）        # API Key，只存密文
 
 | 能力 | Pi 那边是什么 | Kivora 做什么 |
 |---|---|---|
-| 桌面控制、浏览器 | **MCP 扩展**（pi 1.4.0+ 自带），读 `~/.pi/agent/mcp.json` | 设置 → 扩展：一键加 `cua-driver` / `@playwright/mcp`；只写 `kivora-` 前缀的条目，用户自己的服务器原样保留 |
+| 桌面控制、浏览器 | **MCP 扩展**（随包的 pi 1.4.0 自带），读 `~/.pi/agent/mcp.json` | 设置 → 扩展：一键加 `cua-driver` / `@playwright/mcp`；只写 `kivora-` 前缀的条目，用户自己的服务器原样保留 |
 | 权限控制 | **扩展的 `tool_call` 钩子** + `ctx.ui.confirm()` | 内置 `resources/kivora-permission.ts`：危险 bash、家目录外写入、动作类 MCP 工具先问；在 RPC 模式里变成审批卡，回答写回 `extension_ui_response` |
 | 会话压缩 | **RPC `compact`** / 自动压缩 | 历史页「压缩」按钮（仅 Pi 会话）；`compaction_start/end` 事件进事件流 |
 | 消息队列 | **RPC `steer` / `follow_up`**，事件 `queue_update` | 说「插一句」→ `steer` 进正在跑的 Pi 会话；任务级排队仍在 Kivora 自己的队列里 |

@@ -6,7 +6,7 @@ import { closeStore, openStore, pruneOldData, recoverOrphanSessions } from "../s
 import { seedModels } from "../src/main/repos/models.ts";
 import { initSecrets } from "../src/main/secrets.ts";
 import { getConfig, setConfig } from "../src/main/repos/config.ts";
-import { detectPi } from "../src/main/env.ts";
+import { initPi } from "../src/main/env.ts";
 import {
   createMainWindow,
   focusMain,
@@ -191,7 +191,7 @@ app.whenReady().then(async () => {
   const info = openStore(dataDir);
   console.log(`[kivora] store ${info.dbPath} schema v${info.schemaVersion}`);
 
-  await detectPi();
+  initPi(app.getAppPath());
   await initSecrets();
   const recovered = recoverOrphanSessions();
   if (recovered) console.warn(`[kivora] marked ${recovered} orphaned sessions as failed`);

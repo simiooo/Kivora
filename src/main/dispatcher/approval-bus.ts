@@ -1,4 +1,5 @@
 import type { Approval, ApprovalResolution } from "../../shared/domain.ts";
+import { effectiveApprovalTimeoutMs } from "../../shared/domain.ts";
 import { createApproval, getApproval, listApprovals, resolveApproval, type CreateApprovalInput } from "../repos/approvals.ts";
 import { appendEvent, appendMessage } from "../repos/sessions.ts";
 import { broadcast, speak } from "../bus.ts";
@@ -25,7 +26,13 @@ export interface OpenApprovalInput extends CreateApprovalInput {
 
 export function openApproval(input: OpenApprovalInput): Approval {
   const config = getConfig();
-  const approval = createApproval(input);
+  const approval = createApproval({
+    ...input,
+    timeoutMs:
+      input.timeoutMs === undefined
+        ? effectiveApprovalTimeoutMs(input.risk, config.approvalTimeoutSec)
+        : input.timeoutMs,
+  });
   appendMessage({
     role: "assistant",
     content: input.question,

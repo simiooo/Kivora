@@ -214,8 +214,8 @@ function GeneralSection({
             label="Pi 会话"
             detail={
               bootstrap.state.piAvailable
-                ? `pi ${bootstrap.state.piVersion ?? ""} · 未接入审批`
-                : "没检测到 pi"
+                ? `内置 pi ${bootstrap.state.piVersion ?? ""} · 工具走审批`
+                : "内置 pi 缺失"
             }
           />
         </div>
@@ -420,7 +420,6 @@ function ExtensionsSection(): React.JSX.Element {
   const [name, setName] = useState("");
   const [command, setCommand] = useState("npx");
   const [args, setArgs] = useState("");
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     void Promise.all([bridge.listMcpServers(), bridge.mcpCapability(), bridge.mcpPresets()])
@@ -490,27 +489,13 @@ function ExtensionsSection(): React.JSX.Element {
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-[13px] text-foreground">
-              {cap ? (cap.available ? "Pi 支持 MCP" : "Pi 还不支持 MCP") : "正在检查…"}
+              {cap ? (cap.available ? "Pi 支持 MCP" : "内置 Pi 不支持 MCP") : "正在检查…"}
             </div>
             <p className="mt-1 text-[12px] leading-5 text-faint">{cap?.reason}</p>
             {cap ? (
               <p className="mt-1 truncate font-mono text-[11px] text-faint">{displayPath(cap.file, 64)}</p>
             ) : null}
           </div>
-          {cap && !cap.available ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                void navigator.clipboard.writeText("pi update self");
-                setCopied(true);
-                window.setTimeout(() => setCopied(false), 1400);
-              }}
-            >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              {copied ? "已复制" : "复制更新命令"}
-            </Button>
-          ) : null}
         </div>
       </div>
 
@@ -720,7 +705,7 @@ function AboutSection({ bootstrap }: { bootstrap: Bootstrap }): React.JSX.Elemen
     ["版本", `${bootstrap.state.version}（schema v${bootstrap.state.schemaVersion}）`],
     ["Electron", bootstrap.state.electron],
     ["Node", bootstrap.state.node],
-    ["Pi 内核", bootstrap.state.piAvailable ? `已安装 ${bootstrap.state.piVersion ?? ""}` : "未检测到（任务用内置执行器）"],
+    ["Pi 内核", bootstrap.state.piAvailable ? `内置 ${bootstrap.state.piVersion ?? ""}（随应用发布）` : "缺失"],
     [
       "任务执行器",
       bootstrap.config.mockMode

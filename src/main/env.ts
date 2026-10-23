@@ -1,55 +1,60 @@
-import { exec } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
 /**
- * 启动时探一次 Pi CLI：版本、以及有没有 MCP 扩展（--help 里有 `mcp` 命令）。
- * 探测结果只用于 UI 展示与能力判断，不阻断启动。
+ * Pi 随应用发布：`@earendil-works/pi-coding-agent` 装在自己的依赖里，
+ * 不依赖用户机器上的全局 pi。这样版本、MCP 支持、RPC 协议都是确定的。
+ *
+ * KIVORA_PI_BIN 只是给测试/特殊环境留的覆盖口子。
  */
 
 let piVersion: string | null = null;
-let piHelp: string | null = null;
-let checked = false;
+let piCli: string | null = null;
+let appRoot = "";
 
-function run(command: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    exec(command, { timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024 }, (err, stdout) => {
-      if (err) resolve(null);
-      else resolve(String(stdout));
-    });
-  });
+function bundledPackageJson(root: string): string {
+  return path.join(root, "node_modules", "@earendil-works", "pi-coding-agent", "package.json");
 }
 
-export async function detectPi(): Promise<void> {
-  if (checked) return;
-  checked = true;
-  const bin = process.env.KIVORA_PI_BIN || "pi";
-  const versionOut = await run(`"${bin}" --version`);
-  if (versionOut) {
-    const match = versionOut.trim().match(/\d+\.\d+\.\d+/);
-    piVersion = match ? match[0] : versionOut.trim().slice(0, 20) || null;
+export function bundledPiCli(root: string): string {
+  return path.join(root, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "bundle", "cli.js");
+}
+
+/** 主进程启动时调一次：读随包发布的 pi 版本，顺便确认 CLI 在不在 */
+export function initPi(root: string): void {
+  appRoot = root;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(bundledPackageJson(root), "utf8")) as { version?: string };
+    piVersion = typeof pkg.version === "string" ? pkg.version : null;
+  } catch {
+    piVersion = null;
   }
-  if (piVersion) {
-    piHelp = await run(`"${bin}" --help`);
+  const cli = bundledPiCli(root);
+  piCli = fs.existsSync(cli) ? cli : null;
+  if (process.env.KIVORA_PI_BIN) {
+    console.log(`[kivora] pi override ${process.env.KIVORA_PI_BIN}`);
+  } else {
+    console.log(`[kivora] pi bundled ${piVersion ?? "missing"} cli=${piCli ? "ok" : "missing"}`);
   }
-  console.log(`[kivora] pi ${piVersion ?? "not found"} mcp=${piHelp ? /^\s+mcp\b/m.test(piHelp) : "?"}`);
 }
 
 export function getPiVersion(): string | null {
   return piVersion;
 }
 
-export function getPiHelp(): string | null {
-  return piHelp;
+/** 要执行的 CLI 路径：测试覆盖优先，否则用内置的 */
+export function piCliPath(): string | null {
+  if (process.env.KIVORA_PI_BIN) return process.env.KIVORA_PI_BIN;
+  if (piCli) return piCli;
+  return piVersion ? bundledPiCli(appRoot) : null;
+}
+
+/** .cmd 之类的覆盖入口需要 shell 才能起 */
+export function piUsesShell(): boolean {
+  const bin = process.env.KIVORA_PI_BIN;
+  return Boolean(bin && /\.(cmd|bat)$/i.test(bin));
 }
 
 export function piAvailable(): boolean {
-  // KIVORA_PI_BIN 是给测试/自定义安装路径留的口子
-  return Boolean(process.env.KIVORA_PI_BIN) || piVersion !== null;
-}
-
-export function nodeVersion(): string {
-  return process.versions.node;
-}
-
-export function electronVersion(): string {
-  return process.versions.electron ?? "";
+  return Boolean(process.env.KIVORA_PI_BIN) || piCli !== null;
 }

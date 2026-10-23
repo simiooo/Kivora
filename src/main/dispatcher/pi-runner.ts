@@ -9,7 +9,7 @@ import { getConfig } from "../repos/config.ts";
 import { getBoundModel } from "../repos/models.ts";
 import { getSecret, modelSecretName } from "../secrets.ts";
 import { permissionExtensionPath } from "../paths.ts";
-import { getPiVersion } from "../env.ts";
+import { getPiVersion, piCliPath, piUsesShell } from "../env.ts";
 import { managedServerCount, mcpCapability } from "../mcp.ts";
 import { awaitApproval, cancelApprovalsForSession, openApproval } from "./approval-bus.ts";
 
@@ -63,10 +63,6 @@ export function piRunCount(): number {
 
 function quoteWin(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
-}
-
-function piCommand(): string {
-  return process.env.KIVORA_PI_BIN || "pi";
 }
 
 function safeModelSpec(): string | null {
@@ -266,18 +262,37 @@ export function startPiRun(session: Session, hooks: PiRunHooks): void {
   const extension = permissionExtensionPath();
   if (fs.existsSync(extension)) args.push("--extension", extension);
 
-  const command = [piCommand(), ...args].map(quoteWin).join(" ");
-  console.log(`[kivora] pi rpc: ${command}`);
+  const cli = piCliPath();
+  if (!cli) {
+    failPi(session.id, "no_model", "找不到内置的 pi。", "打包时没有带上 @earendil-works/pi-coding-agent。", false);
+    hooks.onFinish(session.id);
+    return;
+  }
 
   let child: ChildProcess;
   try {
-    child = spawn("cmd.exe", ["/d", "/s", "/c", `"${command}"`], {
-      cwd: os.homedir(),
-      env: piEnv(),
-      windowsHide: true,
-      windowsVerbatimArguments: true,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    if (piUsesShell()) {
+      // 测试/特殊环境：KIVORA_PI_BIN 指向 .cmd，需要 shell
+      const command = [cli, ...args].map(quoteWin).join(" ");
+      console.log(`[kivora] pi rpc (override): ${command}`);
+      child = spawn("cmd.exe", ["/d", "/s", "/c", `"${command}"`], {
+        cwd: os.homedir(),
+        env: piEnv(),
+        windowsHide: true,
+        windowsVerbatimArguments: true,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } else {
+      // 正常路径：用应用自带的 Electron 当 Node 跑内置 pi，
+      // 不依赖用户机器上的 node 或全局 pi
+      console.log(`[kivora] pi rpc (bundled): ${cli}`);
+      child = spawn(process.execPath, [cli, ...args], {
+        cwd: os.homedir(),
+        env: { ...piEnv(), ELECTRON_RUN_AS_NODE: "1" },
+        windowsHide: true,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    }
   } catch (err) {
     failPi(session.id, "internal", "启动不了 Pi 会话。", err instanceof Error ? err.message : String(err), false);
     hooks.onFinish(session.id);

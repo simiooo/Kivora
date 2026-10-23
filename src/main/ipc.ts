@@ -25,7 +25,7 @@ import {
   appendEvent,
 } from "./repos/sessions.ts";
 import { clearQueue, listQueue, promoteQueued, removeFromQueue } from "./repos/queue.ts";
-import { answerById } from "./dispatcher/approval-bus.ts";
+import { answerById, cancelApprovalsForSession } from "./dispatcher/approval-bus.ts";
 import { listApprovals, listGrants, pendingApprovals, pendingForSession, revokeGrants } from "./repos/approvals.ts";
 import {
   bindModel,
@@ -231,6 +231,8 @@ export function registerIpc(deps: IpcDeps): void {
     const id = parse(sessionId, raw);
     cancelRun(id);
     cancelPiRun(id);
+    // 删会话前先把它挂着的审批结掉，否则等答案的会话会一直挂着
+    cancelApprovalsForSession(id);
     deleteSession(id);
     broadcast("sessions");
     broadcast("timeline");

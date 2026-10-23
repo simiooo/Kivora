@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { hasMcpCommand, listServers, mcpCapability, mcpFilePath, MCP_PRESETS, removeServer, saveServer } from "./mcp.ts";
+import { listServers, mcpCapability, mcpFilePath, MCP_PRESETS, removeServer, saveServer } from "./mcp.ts";
 
 let home = "";
 
@@ -82,14 +82,8 @@ describe("MCP 配置", () => {
 });
 
 describe("MCP 能力判断", () => {
-  it("--help 里有 mcp 命令才算支持", () => {
-    expect(hasMcpCommand("  mcp <command>  Manage MCP servers\n")).toBe(true);
-    expect(hasMcpCommand("Commands:\n  install\n  list\n")).toBe(false);
-    expect(hasMcpCommand(null)).toBe(false);
-  });
-
-  it("没有 pi 时不假装支持", () => {
-    const capability = mcpCapability(null);
+  it("没有内置 pi 时不假装支持", () => {
+    const capability = mcpCapability();
     expect(capability.available).toBe(false);
     expect(capability.reason).toContain("pi");
   });

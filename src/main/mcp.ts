@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { AppError } from "../shared/errors.ts";
-import { getPiHelp, getPiVersion, piAvailable } from "./env.ts";
+import { getPiVersion, piAvailable } from "./env.ts";
 import type { McpCapability, McpPreset, McpServerInput, McpServerView } from "../shared/domain.ts";
 
 /**
@@ -121,31 +121,15 @@ export function removeServer(name: string): McpServerView[] {
   return listServers();
 }
 
-/** pi --help 里出现 mcp 命令 = 这个版本带 MCP 扩展 */
-export function hasMcpCommand(helpText: string | null): boolean {
-  return Boolean(helpText && /^\s+mcp\b/m.test(helpText));
-}
-
-/** Pi 的 MCP 扩展是后来才有的：0.84 的 --help 里没有 mcp 命令 */
-export function mcpCapability(helpText: string | null = getPiHelp()): McpCapability {
+/** MCP 是 pi 1.4.0 起内置的；Kivora 随包带的就是 1.4.0，所以正常always true */
+export function mcpCapability(): McpCapability {
   const version = getPiVersion();
   const file = mcpFilePath();
   if (!piAvailable()) {
     return {
       pi: null,
       available: false,
-      reason: "没检测到 pi。装一个（pnpm i -g @earendil-works/pi-coding-agent）才能用 MCP。",
-      file,
-    };
-  }
-  if (helpText !== null) {
-    const hasCommand = hasMcpCommand(helpText);
-    return {
-      pi: version,
-      available: hasCommand,
-      reason: hasCommand
-        ? "pi 支持 MCP，配好的服务器会在任务会话里自动加载。"
-        : `pi ${version ?? ""} 还没有 MCP 扩展；更新到 1.4.0+ 再回来（pi update self）。`,
+      reason: "内置 pi 缺失，MCP 不可用。重装 Kivora 或设置 KIVORA_PI_BIN。",
       file,
     };
   }
@@ -155,8 +139,8 @@ export function mcpCapability(helpText: string | null = getPiHelp()): McpCapabil
     pi: version,
     available: atLeast,
     reason: atLeast
-      ? "pi 支持 MCP，配好的服务器会在任务会话里自动加载。"
-      : `pi ${version ?? ""} 还没有 MCP 扩展；更新到 1.4.0+ 再回来（pi update self）。`,
+      ? `内置 pi ${version ?? ""} 自带 MCP，配好的服务器会在任务会话里自动加载。`
+      : `内置 pi ${version ?? ""} 太旧，没有 MCP。`,
     file,
   };
 }
