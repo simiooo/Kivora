@@ -1,4 +1,4 @@
-﻿import { Endpointer, boostLevel } from "./vad.ts";
+import { Endpointer, boostLevel } from "./vad.ts";
 
 /**
  * 免按键：麦克风常开，只做"有没有人在说话"的判断，不录音、不发送。
@@ -94,17 +94,14 @@ export class WakeGate {
       }
       const level = boostLevel(Math.sqrt(sum / data.length));
       const now = performance.now();
-      if (this.options.isSpeaking?.()) {
-        // 自己在说话：既不检测，也不累计
-        this.lastSpeechAt = now;
-        this.raf = requestAnimationFrame(tick);
-        return;
-      }
       if (now - this.lastSpeechAt < this.options.resumeDelayMs) {
         this.raf = requestAnimationFrame(tick);
         return;
       }
-      const event = vad.push(level, now);
+      // 自己正在播报时也听，但把电平压下去：只有明显比你说话更响的声音才算打断，
+      // 靠 echoCancellation + 这个折减挡住"自己把自己打断"。
+      const effective = this.options.isSpeaking?.() ? level * 0.45 : level;
+      const event = vad.push(effective, now);
       if (event?.type === "speech-start") {
         this.lastSpeechAt = now;
         this.stop();

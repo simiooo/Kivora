@@ -309,7 +309,11 @@ export function Composer({
     const gate = new WakeGate({
       deviceId: micId || undefined,
       isSpeaking: isSpeakingAudio,
-      onWake: () => void startRecording(),
+      // 开口即打断：如果它正在说/正在想，先停掉，再开始听你说的
+      onWake: () => {
+        void bridge.interrupt();
+        void startRecording();
+      },
     });
     void gate.start().catch((err) => {
       if (gateErrorShown.current) return;

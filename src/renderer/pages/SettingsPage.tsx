@@ -385,7 +385,7 @@ function VoiceSection({
         />
         <ToggleRow
           title="免按键，开口就说"
-          description="麦克风常开，检测到你在说话就自动开始识别，全程不用按热键。代价是 Windows 会一直显示麦克风占用；它自己在播报时不会听，避免把自己的声音当成你。"
+          description="麦克风常开，检测到你在说话就自动开始识别，全程不用按热键。它在播报时也听着——你直接开口就能打断它（阈值会提高，避免它被自己的声音打断）。代价是 Windows 会一直显示麦克风占用。"
           checked={bootstrap.config.handsFree}
           onChange={(value) =>
             void onConfig({ handsFree: value }).catch((err) =>
