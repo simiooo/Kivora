@@ -279,7 +279,9 @@ export function migrateDeepSeekModelIds(): number {
   for (const fix of DEEPSEEK_ID_FIXES) {
     for (const from of fix.from) {
       const result = db()
-        .prepare("UPDATE models SET model_id = ?, name = ?, updated_at = ? WHERE model_id = ?")
+        .prepare(
+          "UPDATE models SET model_id = ?, name = ?, test_status = 'untested', tested_at = NULL, test_latency_ms = NULL, updated_at = ? WHERE model_id = ?",
+        )
         .run(fix.to, fix.name, now, from);
       renamed += Number(result.changes);
     }
@@ -318,7 +320,9 @@ export function repairTtsVoices(): number {
     const voice = typeof params.voice === "string" ? params.voice.trim() : "";
     if (isKnownVoice(row.model_id, voice)) continue;
     db()
-      .prepare("UPDATE models SET params = ?, updated_at = ? WHERE id = ?")
+      .prepare(
+        "UPDATE models SET params = ?, test_status = 'untested', tested_at = NULL, test_latency_ms = NULL, updated_at = ? WHERE id = ?",
+      )
       .run(JSON.stringify({ ...params, voice: fallback }), now, row.id);
     console.log(`[kivora] voice fixed for ${row.model_id}: "${voice || "(empty)"}" → ${fallback}`);
     repaired += 1;
