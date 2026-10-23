@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy, ExternalLink, FlaskConical, Play, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import type { Bootstrap } from "@shared/ipc.ts";
 import type { AppConfig, Grant, McpCapability, McpPreset, McpServerView } from "@shared/domain.ts";
@@ -389,6 +389,32 @@ function VoiceSection({
             )
           }
         />
+        <ToggleRow
+          title="先说唤醒词"
+          description="免按键时要求先叫名字，再说要做什么。需要绑定流式识别模型（预设里的「Qwen 流式识别」）：它会先把开口后约 1.5 秒的音频送去识别，看有没有叫名字——没叫就整段丢掉。这段音频仍会经过识别服务，介意就别开。"
+          checked={bootstrap.config.wakeRequired}
+          onChange={(value) =>
+            void onConfig({ wakeRequired: value }).catch((err) =>
+              toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
+            )
+          }
+        />
+        <div className="flex items-center gap-3 border-b border-border/60 py-4">
+          <div className="min-w-0 flex-1">
+            <div className="text-[14px]">叫的名字</div>
+            <p className="mt-1 text-[12px] text-faint">认字不认调：识别结果里出现这个词就算叫了。</p>
+          </div>
+          <Input
+            className="h-9 w-40 text-center"
+            value={bootstrap.config.wakeWord}
+            onChange={(event) => {
+              const word = event.target.value.slice(0, 12);
+              void onConfig({ wakeWord: word || "小栗" }).catch((err) =>
+                toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
+              );
+            }}
+          />
+        </div>
         <ToggleRow
           title="只听不记"
           description="你说的话不写进时间线，只保留动作和结果。适合旁边有人、或者你不想让原话留在本地数据库里的时候。"

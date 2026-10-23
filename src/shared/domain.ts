@@ -325,6 +325,10 @@ export interface AppConfig {
   autoStopSilenceMs: number;
   /** 免按键：麦克风常开，检测到人说话就自动开始识别 */
   handsFree: boolean;
+  /** 免按键时要求先叫名字（需要流式识别：先听 1.5 秒再决定是否继续） */
+  wakeRequired: boolean;
+  /** 叫的名字 */
+  wakeWord: string;
   /** 只听不记：不把你说的话写进时间线（只留动作和结果） */
   privateMode: boolean;
   /** 内置执行器做不了的任务自动转给 Pi 会话 */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { History, Settings2, Sparkles } from "lucide-react";
 import type { Bootstrap, Message, Session } from "@shared/ipc.ts";
 import type { ApprovalResolution, SessionEvent } from "@shared/domain.ts";
@@ -258,6 +258,8 @@ export function TimelinePage({
         autoStop={bootstrap.config.autoStop}
         autoStopSilenceMs={bootstrap.config.autoStopSilenceMs}
         handsFree={bootstrap.config.handsFree}
+        wakeRequired={bootstrap.config.wakeRequired}
+        wakeWord={bootstrap.config.wakeWord}
       />
 
       <QueuePanel

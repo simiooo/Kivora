@@ -114,6 +114,8 @@ const configPatchSchema = z.object({
   autoStop: z.boolean().optional(),
   autoStopSilenceMs: z.number().int().min(300).max(3000).optional(),
   handsFree: z.boolean().optional(),
+  wakeRequired: z.boolean().optional(),
+  wakeWord: z.string().trim().min(1).max(12).optional(),
   privateMode: z.boolean().optional(),
   autoEscalate: z.boolean().optional(),
   asrLanguage: z.enum(["zh", "en", "auto"]).optional(),

@@ -1,4 +1,4 @@
-import { db, tx } from "../store.ts";
+﻿import { db, tx } from "../store.ts";
 import type { AppConfig } from "../../shared/domain.ts";
 
 export const CONFIG_DEFAULTS: AppConfig = {
@@ -10,6 +10,8 @@ export const CONFIG_DEFAULTS: AppConfig = {
   autoStop: true,
   autoStopSilenceMs: 800,
   handsFree: false,
+  wakeRequired: false,
+  wakeWord: "小栗",
   privateMode: false,
   autoEscalate: true,
   asrLanguage: "zh",

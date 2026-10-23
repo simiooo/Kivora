@@ -1,11 +1,15 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, Mic, Square, X } from "lucide-react";
 import { bridge } from "../lib/bridge.ts";
 import { Recorder, isSpeakingAudio, listMics, pcm16ToBase64, type MicDevice } from "../lib/audio.ts";
+import { containsWakeWord } from "@shared/wake.ts";
 import { concatFloat32 } from "@shared/wav.ts";
 import { WakeGate } from "../lib/wake.ts";
 import { cn } from "../lib/utils.ts";
 import { useToast } from "./ui.tsx";
+
+/** 从开口到判定"有没有叫名字"的窗口：太短名字还没说完，太长白等 */
+const WAKE_WINDOW_MS = 1_600;
 
 export function Composer({
   busy,
@@ -17,6 +21,8 @@ export function Composer({
   autoStop,
   autoStopSilenceMs,
   handsFree,
+  wakeRequired,
+  wakeWord,
 }: {
   busy: boolean;
   runningTitle: string | null;
@@ -27,6 +33,8 @@ export function Composer({
   autoStop: boolean;
   autoStopSilenceMs: number;
   handsFree: boolean;
+  wakeRequired: boolean;
+  wakeWord: string;
 }): React.JSX.Element {
   const toast = useToast();
   const [draft, setDraft] = useState("");
@@ -40,6 +48,7 @@ export function Composer({
   const lastLevelAt = useRef(0);
   // 端点检测在音频回调里跑，回调引用最新的收尾函数
   const streamRef = useRef<string | null>(null);
+  const wakeRef = useRef<{ active: boolean; armed: boolean; timer: number }>({ active: false, armed: false, timer: 0 });
   const stopRef = useRef<() => void>(() => undefined);
   const cancelRef = useRef<() => void>(() => undefined);
 
@@ -95,10 +104,26 @@ export function Composer({
       return;
     }
     setRecording(true);
-    setLevel(0);
-    // 识别模型是流式的就边说边传；不是、或者服务没起来，就退回"录完再传"
+    setLevel(0);    // 识别模型是流式的就边说边传；不是、或者服务没起来，就退回"录完再传"
     const stream = await bridge.asrStreamStart().catch(() => ({ streaming: false as const }));
     streamRef.current = stream.streaming ? stream.id : null;
+    // 唤醒词门只能建在流式识别上（先听一小段再决定要不要继续）
+    if (wakeRequired && stream.streaming) {
+      wakeRef.current = { active: true, armed: false, timer: 0 };
+      wakeRef.current.timer = window.setTimeout(() => {
+        if (!wakeRef.current.active || wakeRef.current.armed) return;
+        wakeRef.current.active = false;
+        recorder.current.cancel();
+        const id = streamRef.current;
+        streamRef.current = null;
+        if (id) void bridge.asrStreamCancel(id).catch(() => undefined);
+        setRecording(false);
+        setLevel(0);
+        bridge.reportLevel(0);
+        bridge.reportVoice(false);
+        toast.push({ tone: "info", title: `没听到「${wakeWord}」`, detail: "先说名字，再说要做什么。" });
+      }, WAKE_WINDOW_MS);
+    }
     const pending: Float32Array[] = [];
     let pendingSamples = 0;
     try {
@@ -137,12 +162,29 @@ export function Composer({
         detail: err instanceof Error ? err.message : String(err),
       });
     }
-  }, [autoStop, autoStopSilenceMs, micId, reportLevel, toast]);
+  }, [autoStop, autoStopSilenceMs, micId, reportLevel, toast, wakeRequired, wakeWord]);
 
   const stopRecording = useCallback(async () => {
     if (!recorder.current.active) {
       setRecording(false);
       return;
+    }
+    // 还没叫名字就结束了：整段丢掉，不发出去
+    if (wakeRef.current.active) {
+      window.clearTimeout(wakeRef.current.timer);
+      const armed = wakeRef.current.armed;
+      wakeRef.current.active = false;
+      if (!armed) {
+        const id = streamRef.current;
+        streamRef.current = null;
+        recorder.current.cancel();
+        if (id) void bridge.asrStreamCancel(id).catch(() => undefined);
+        setRecording(false);
+        setLevel(0);
+        bridge.reportLevel(0);
+        toast.push({ tone: "info", title: `没听到「${wakeWord}」`, detail: "先说名字，再说要做什么。" });
+        return;
+      }
     }
     setRecording(false);
     setLevel(0);
@@ -182,6 +224,8 @@ export function Composer({
   }, [onSent, toast]);
 
   const cancelRecording = useCallback(() => {
+    window.clearTimeout(wakeRef.current.timer);
+    wakeRef.current = { active: false, armed: false, timer: 0 };
     const streamId = streamRef.current;
     streamRef.current = null;
     recorder.current.cancel();
@@ -190,6 +234,17 @@ export function Composer({
     setLevel(0);
     bridge.reportLevel(0);
   }, []);
+
+  // 唤醒词门：流式识别的中间结果里出现名字就放行，超时没出现就整段丢掉
+  useEffect(() => {
+    if (!wakeRequired) return;
+    return bridge.subscribe((event) => {
+      if (event.kind !== "voice" || !wakeRef.current.active || wakeRef.current.armed) return;
+      if (typeof event.partial !== "string" || !containsWakeWord(event.partial, wakeWord)) return;
+      wakeRef.current.armed = true;
+      window.clearTimeout(wakeRef.current.timer);
+    });
+  }, [wakeRequired, wakeWord]);
 
   // 端点检测只拿到"事件"，具体收尾用最新的这两个函数
   useEffect(() => {
