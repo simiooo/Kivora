@@ -40,6 +40,7 @@ export async function classify(
   text: string,
   context: string,
   signal?: AbortSignal,
+  diagnostics?: { failed?: boolean },
 ): Promise<BrainDecision | null> {
   const controller = new AbortController();
   const onAbort = (): void => controller.abort();
@@ -70,6 +71,8 @@ export async function classify(
     };
   } catch (err) {
     console.warn("[kivora] brain classify failed, fallback to reflex", (err as Error).message);
+    // 被主动打断不算"模型挂了"，不该给用户播降级提示
+    if (diagnostics && !signal?.aborted) diagnostics.failed = true;
     return null;
   } finally {
     clearTimeout(timer);

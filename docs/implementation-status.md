@@ -19,6 +19,9 @@
 | 状态投影 + 事件流 | squent 3.7 | `repos/sessions.ts` `patchStatus/appendEvent`、`SessionStrip` | flow、shots |
 | 先出声：旁白 | squent 3.9 | `say()` → `bus.speak()`，`narration` 开关 | 手动 |
 | **先出声：400ms 没结果才播 ack** | squent 3.9 / voice 1.2(A1) | `dispatcher/index.ts` `think()`：400ms 定时器 + `ack.ts` 意图短语 | ack.test（短语与意图） |
+| **一轮最多两段语音** | squent 3.9 | `collect().spoken` 计数，`say()` 与 ack 共用预算，超了就只留文字不出声 | 代码 + 日志 `speech budget reached` |
+| **上下文分层（5 层）** | squent 2.3 | `dispatcher/brain-context.ts`：偏好 / 最近说过 / 上次任务 / 当前 / 队列；稳定规则留在 system 里吃前缀缓存，时钟等易变信息不进去 | brain-context.test（6 条：空态、在跑、截断、时间感、偏好、无时钟） |
+| **brain 熔断后的降级提示** | squent 3.10 | 判别真的失败（不是被打断）且还没播过 ack 时，说一句"我脑子暂时连不上，先按字面做。" | 代码（`diagnostics.failed`） |
 | **任务 >8s 补一句"还在弄"，只一次** | squent 3.9 | `runner.ts` `announceIfSlow()` | 手动 |
 | **打断：停播报 + 取消那次判断** | voice 1.2 / 2.2 | `turn-state.ts` `interruptTurn()`；`bus.stopSpeech()`；快捷键与 Esc 触发 | 手动 |
 | **"在想"状态** | 本次补充 | `turn-state.setThinking()` + `OverlayState.thinking` + 悬浮窗三颗点 | shots |
@@ -39,9 +42,9 @@
 | 设计项 | 出处 | 现状 | 为什么先不做 / 下一步 |
 |---|---|---|---|
 | **唤醒词"小栗"** | voice 1.2 | 没有唤醒词门（开口即听）；但**称呼会被去掉**：`stripWakeName()` 让「小栗，把发票挪过去」等同于「把发票挪过去」 | 唤醒词门要本地小模型（Porcupine 需商业 key；openWakeWord 需 ONNX 运行时 + 训练）。当前选择「VAD 即唤醒」，隐私靠"自己播报时不听 + 30 分钟自动退回"护栏。要上唤醒词门就换 `wake.ts` 一个文件 |
-| **A0–A3 响应阶梯 / Cost Router** | voice 0 / 1.2 | 固定单模型栈；ack 固定 400ms 一条 | 属于成本优化，功能上已够用；等接入多模型/多通道再谈 |
-| **6 层上下文栈 + 稳定前缀 ≥80% 命中** | voice 2.3 | brain 只带一句 `describeContext()`；Pi 会话自带上下文 | 影响的是账单不是功能 |
-| **L2/L3 实时通道 ≤3%** | voice 0 | 未接入实时 ASR；TTS 整段合成 | 同上 |
+| **A0–A3 响应阶梯** | voice 0 / 1.2 | A0 反射零模型 / A1 400ms ack / A2 >8s 进度 / A3 结论：四段都在；缺的是"按任务时长选 ack 级别"的 Cost Router | Cost Router 要有多通道（实时 vs 批式）才有意义，现在只有一条通道 |
+| **6 层上下文栈** | voice 2.3 | 实到 5 层（偏好 / 最近说过 / 上次任务 / 当前 / 队列），没有"长期记忆" | 产品还没有记忆库，宁缺毋滥；前缀缓存靠"稳定 system + 易变信息在尾部"已经吃到 |
+| **L2/L3 实时通道 ≤3%** | voice 0 | 未接入实时 ASR；TTS 整段合成 | 属于成本口径；流式识别已覆盖"边说边出字"的体感 |
 | **取景框 / 虚拟光标 / 4 类轻提示** | voice 0 / 1 | 未做（overlay 只有常驻卡片） | 要等 Pi + MCP 的桌面控制先稳定 |
 
 ## 三、怎么避免再次脱节

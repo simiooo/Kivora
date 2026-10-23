@@ -1,4 +1,4 @@
-﻿import type { Message, Session, TurnResult } from "../../shared/domain.ts";
+import type { Message, Session, TurnResult } from "../../shared/domain.ts";
 import { isActive, newId } from "../../shared/domain.ts";
 import {
   appendEvent,
@@ -9,6 +9,9 @@ import {
   findRunningSession,
   getSession,
   listActiveSessions,
+  listSessionItems,
+
+  listTimeline,
   renameSession,
   setSessionError,
   setSessionState,
@@ -21,6 +24,7 @@ import { cancelPiRun, isPiRunning, steerPiRun } from "./pi-runner.ts";
 import { mockMode, piAvailable } from "../env.ts";
 import { beginTurn, isCurrentTurn, setThinking } from "../turn-state.ts";
 import { acknowledgmentFor, isQuestion, looksActionable, stripWakeName } from "./ack.ts";
+import { buildBrainContext } from "./brain-context.ts";
 import { setConfig } from "../repos/config.ts";
 import { broadcast, speak } from "../bus.ts";
 import { getConfig } from "../repos/config.ts";
@@ -70,16 +74,32 @@ export function makeTitle(text: string): string {
   return tailEllipsis(cleaned || text.trim(), 18);
 }
 
-function collect(): { push: (message: Message) => void; messages: Message[] } {
-  const messages: Message[] = [];
-  return { messages, push: (message) => messages.push(message) };
+interface TurnCollector {
+  push: (message: Message) => void;
+  messages: Message[];
+  /** 这一轮已经播了几段语音（方案 3.9：最多两段，别叠着说） */
+  spoken: { count: number };
 }
+
+function collect(): TurnCollector {
+  const messages: Message[] = [];
+  return { messages, push: (message) => messages.push(message), spoken: { count: 0 } };
+}
+
+const SPEECH_SEGMENTS_PER_TURN = 2;
 
 function say(turn: ReturnType<typeof collect>, content: string, opts: { speak?: boolean; sessionId?: string | null } = {}): Message {
   const message = appendMessage({ role: "assistant", content, sessionId: opts.sessionId ?? null });
   turn.push(message);
   const config = getConfig();
-  if (opts.speak !== false && config.narration) void speak(content);
+  if (opts.speak !== false && config.narration) {
+    if (turn.spoken.count < SPEECH_SEGMENTS_PER_TURN) {
+      turn.spoken.count += 1;
+      void speak(content);
+    } else {
+      console.log(`[kivora] speech budget reached, staying quiet: ${content.slice(0, 16)}`);
+    }
+  }
   return message;
 }
 
@@ -139,13 +159,39 @@ export function pump(): void {
   }
 }
 
-async function brainDecision(text: string, context: string, signal?: AbortSignal): Promise<BrainDecision | null> {
+async function brainDecision(
+  text: string,
+  context: string,
+  signal?: AbortSignal,
+  diagnostics?: { failed?: boolean },
+): Promise<BrainDecision | null> {
   if (mockMode()) return null;
   const model = getBoundModel("brain");
   if (!model) return null;
   const key = getSecret(modelSecretName(model.id));
   if (!key && model.provider !== "custom") return null;
-  return classify(model, key, text, context, signal);
+  return classify(model, key, text, context, signal, diagnostics);
+}
+
+/** 最近几句用户原话（新的在前），给模型一个"刚才在聊什么"的印象 */
+function recentUtterances(limit = 3): string[] {
+  return listTimeline(24)
+    .filter((message) => message.role === "user")
+    .slice(0, limit)
+    .map((message) => message.content);
+}
+
+function contextForBrain(context: RouterContext): string {
+  const last = listSessionItems(undefined, 1)[0] ?? null;
+  const config = getConfig();
+  return buildBrainContext({
+    running: context.running ? { title: context.running.title, phase: context.running.phase } : null,
+    pendingApproval: Boolean(context.pendingApproval),
+    queueCount: context.queueCount,
+    lastRun: last ? { title: last.title, state: last.state, ageMs: Date.now() - last.updatedAt } : null,
+    recentUtterances: recentUtterances(),
+    preferences: { asrLanguage: config.asrLanguage, narration: config.narration },
+  });
 }
 
 export async function handleUtterance(
@@ -182,7 +228,11 @@ export async function handleUtterance(
     let ackTimer: NodeJS.Timeout | null = null;
     if (!acked && config.narration && config.ackEnabled) {
       acked = true;
-      ackTimer = setTimeout(() => void speak(acknowledgmentFor(raw)), ACK_AFTER_MS);
+      ackTimer = setTimeout(() => {
+        if (turn.spoken.count >= SPEECH_SEGMENTS_PER_TURN) return;
+        turn.spoken.count += 1;
+        void speak(acknowledgmentFor(raw));
+      }, ACK_AFTER_MS);
     }
     setThinking(true);
     try {
@@ -196,12 +246,18 @@ export async function handleUtterance(
   const context = buildContext();
   let intent = route(raw, context);
   let decision: BrainDecision | null = null;
+  // 模型是真的失败了，和"没配模型"要分开：前者该说一句降级提示（方案 3.10）
+  const brainFailed: { failed?: boolean } = {};
 
   // 反射只想"建任务"时，先问一次调度模型：它可能只是问个问题，不该开任务
   if (intent.kind === "create_task") {
-    decision = await think(() => brainDecision(raw, describeContext(context), ticket.signal));
+    decision = await think(() => brainDecision(raw, contextForBrain(context), ticket.signal, brainFailed));
     if (!isCurrentTurn(ticket.seq)) {
       return { messages: turn.messages, action: { kind: "none" }, spoken: null };
+    }
+    if (brainFailed.failed && !acked && getConfig().narration) {
+      // 已经播过 ack 就别再叠一句；没播过就用这句顶替
+      say(turn, "我脑子暂时连不上，先按字面做。");
     }
 
     // 只是问一件事：直接答，不建会话（否则会掉进"这条指令需要浏览器"）
@@ -445,13 +501,6 @@ export async function handleUtterance(
   }
 }
 
-function describeContext(context: RouterContext): string {
-  const parts: string[] = [];
-  if (context.running) parts.push(`正在跑：${context.running.title}（${context.running.phase}）`);
-  if (context.pendingApproval) parts.push("有一个等待确认的审批");
-  if (context.queueCount) parts.push(`队列里有 ${context.queueCount} 条`);
-  return parts.join("；") || "空闲";
-}
 
 /* ---------------------------------------------- UI 直接操作（点按钮） */
 
