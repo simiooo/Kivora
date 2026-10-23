@@ -363,6 +363,49 @@ function VoiceSection({
       </Field>
 
       <Card>
+        <ToggleRow
+          title="说完自动结束"
+          description="用音量包络判断你说完了：安静超过设定时长就收尾并发送，不用再按一次热键。环境吵时可能偏早或偏晚，可以调静音时长或者关掉。"
+          checked={bootstrap.config.autoStop}
+          onChange={(value) =>
+            void onConfig({ autoStop: value }).catch((err) =>
+              toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
+            )
+          }
+        />
+        <div className="flex items-center gap-3 border-t border-border/60 py-4">
+          <div className="min-w-0 flex-1">
+            <div className="text-[14px]">静音多久算说完</div>
+            <p className="mt-1 text-[12px] text-faint">
+              太短会把一句话切两段，太长会让你说完还愣一会儿。默认 0.8 秒。
+            </p>
+          </div>
+          <div className="flex gap-1.5">
+            {[500, 800, 1200].map((ms) => (
+              <button
+                key={ms}
+                type="button"
+                disabled={!bootstrap.config.autoStop}
+                onClick={() => {
+                  void onConfig({ autoStopSilenceMs: ms }).catch((err) =>
+                    toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
+                  );
+                }}
+                className={cn(
+                  "h-8 rounded-[10px] px-2.5 text-[12px] transition-colors disabled:opacity-40",
+                  bootstrap.config.autoStopSilenceMs === ms
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {ms / 1000} 秒
+              </button>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      <Card>
         <div className="flex items-center gap-3 border-b border-border/60 py-4">
           <div className="min-w-0 flex-1">
             <div className="text-[14px]">识别模型</div>

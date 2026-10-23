@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, Mic, Square, X } from "lucide-react";
 import { bridge } from "../lib/bridge.ts";
 import { Recorder, listMics, type MicDevice } from "../lib/audio.ts";
@@ -12,6 +12,8 @@ export function Composer({
   onOpenQueue,
   onSent,
   onListeningChange,
+  autoStop,
+  autoStopSilenceMs,
 }: {
   busy: boolean;
   runningTitle: string | null;
@@ -19,6 +21,8 @@ export function Composer({
   onOpenQueue: () => void;
   onSent: () => void;
   onListeningChange?: (listening: boolean) => void;
+  autoStop: boolean;
+  autoStopSilenceMs: number;
 }): React.JSX.Element {
   const toast = useToast();
   const [draft, setDraft] = useState("");
@@ -30,6 +34,9 @@ export function Composer({
   const recorder = useRef(new Recorder());
   const inputRef = useRef<HTMLInputElement>(null);
   const lastLevelAt = useRef(0);
+  // 端点检测在音频回调里跑，回调引用最新的收尾函数
+  const stopRef = useRef<() => void>(() => undefined);
+  const cancelRef = useRef<() => void>(() => undefined);
 
   /**
    * 电平既给主窗的波形，也上报给悬浮窗——悬浮窗是独立渲染进程，
@@ -85,7 +92,18 @@ export function Composer({
     setRecording(true);
     setLevel(0);
     try {
-      await recorder.current.start(micId || undefined, reportLevel);
+      await recorder.current.start(micId || undefined, reportLevel, {
+        // 说完自动结束：只开能量端点检测，不额外下载模型
+        endpoint: autoStop ? { silenceMs: autoStopSilenceMs } : undefined,
+        onEndpoint: (event) => {
+          if (event.type === "speech-start") return;
+          // 从音频回调里挪出来再收尾，避免在回调里拆录音链路
+          window.setTimeout(() => {
+            if (event.type === "speech-end") stopRef.current();
+            else cancelRef.current();
+          }, 0);
+        },
+      });
     } catch (err) {
       setRecording(false);
       toast.push({
@@ -94,7 +112,7 @@ export function Composer({
         detail: err instanceof Error ? err.message : String(err),
       });
     }
-  }, [micId, toast]);
+  }, [autoStop, autoStopSilenceMs, micId, reportLevel, toast]);
 
   const stopRecording = useCallback(async () => {
     if (!recorder.current.active) {
@@ -131,6 +149,15 @@ export function Composer({
     setLevel(0);
     bridge.reportLevel(0);
   }, []);
+
+  // 端点检测只拿到"事件"，具体收尾用最新的这两个函数
+  useEffect(() => {
+    stopRef.current = () => void stopRecording();
+    cancelRef.current = () => {
+      cancelRecording();
+      toast.push({ tone: "info", title: "没听到声音", detail: "看看系统里的麦克风选对了没有。" });
+    };
+  }, [cancelRecording, stopRecording, toast]);
 
   useEffect(() => {
     // 热键是开关：按一下开始录，再按一下结束并发送（没有"按住"这回事，
@@ -185,7 +212,9 @@ export function Composer({
   }, [cancelRecording]);
 
   const placeholder = recording
-    ? "在听……再按一次热键结束"
+    ? autoStop
+      ? "在听……说完自动结束"
+      : "在听……再按一次热键结束"
     : runningTitle
       ? "再说一句会排到队尾；说「先做这个」会插队"
       : "说一句，或者先打字";
@@ -266,7 +295,9 @@ export function Composer({
         </div>
 
         <div className="mt-2 flex items-center gap-3 text-[11px] text-faint">
-          <span>按热键或点麦克风说话，再点一次结束</span>
+          <span>
+            {autoStop ? "按热键或点麦克风说话，说完自动结束" : "按热键或点麦克风说话，再点一次结束"}
+          </span>
           {mics.length > 1 ? (
             <label className="ml-auto flex items-center gap-1">
               <Mic className="size-3" />

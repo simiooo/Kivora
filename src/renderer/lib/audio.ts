@@ -1,4 +1,5 @@
-import { concatFloat32, encodeWav } from "@shared/wav.ts";
+﻿import { concatFloat32, encodeWav } from "@shared/wav.ts";
+import { Endpointer, boostLevel, rms, type EndpointEvent, type EndpointOptionsInput } from "./vad.ts";
 /** 播放与录音：全部走 Web API，主进程只管把字节算出来 */
 
 let audioEl: HTMLAudioElement | null = null;
@@ -85,6 +86,13 @@ function toBase64(bytes: Uint8Array): string {
  * 浏览器只能录 webm/opus，转码又得带 ffmpeg。AudioContext 指定 16k 采样，
  * 采完自己写 WAV 头最省事，也顺带给 Whisper 这类端点用。
  */
+export interface RecordOptions {
+  /** 打开"说完自动结束"；不传就只靠手动停 */
+  endpoint?: EndpointOptionsInput;
+  /** 端点事件：speech-end 该收尾，no-speech 该提示没听到 */
+  onEndpoint?: (event: EndpointEvent) => void;
+}
+
 export class Recorder {
   private stream: MediaStream | null = null;
   private context: AudioContext | null = null;
@@ -93,12 +101,15 @@ export class Recorder {
   private chunks: Float32Array[] = [];
   private startedAt = 0;
   private raf = 0;
+  private endpointer: Endpointer | null = null;
+  private onEndpoint: ((event: EndpointEvent) => void) | null = null;
+  private samplesSeen = 0;
 
   get active(): boolean {
     return this.processor !== null;
   }
 
-  async start(deviceId: string | undefined, onLevel: (level: number) => void): Promise<void> {
+  async start(deviceId: string | undefined, onLevel: (level: number) => void, options: RecordOptions = {}): Promise<void> {
     if (this.active) return;
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error("这个环境拿不到麦克风。");
@@ -126,9 +137,22 @@ export class Recorder {
     const processor = context.createScriptProcessor(4096, 1, 1);
     this.processor = processor;
     this.chunks = [];
+    this.endpointer = options.endpoint ? new Endpointer(options.endpoint) : null;
+    this.onEndpoint = options.onEndpoint ?? null;
+    this.samplesSeen = 0;
     processor.onaudioprocess = (event) => {
       const channel = event.inputBuffer.getChannelData(0);
       this.chunks.push(new Float32Array(channel));
+      if (!this.endpointer || !this.onEndpoint) return;
+      // 4096 一帧太粗（256ms），切成 512（32ms）再判端点，才不会把短句吃掉
+      const block = 512;
+      for (let offset = 0; offset < channel.length; offset += block) {
+        const slice = channel.subarray(offset, Math.min(channel.length, offset + block));
+        const at = ((this.samplesSeen + offset) / context.sampleRate) * 1_000;
+        const endpointEvent = this.endpointer.push(rms(slice), at);
+        if (endpointEvent) this.onEndpoint(endpointEvent);
+      }
+      this.samplesSeen += channel.length;
     };
 
     // 需要一个输出节点才会持续回调；接一个静音增益，避免把麦克风回放到扬声器
@@ -149,7 +173,7 @@ export class Recorder {
         const centered = (value - 128) / 128;
         sum += centered * centered;
       }
-      onLevel(Math.min(1, Math.sqrt(sum / data.length) * 3.2));
+      onLevel(boostLevel(Math.sqrt(sum / data.length)));
       this.raf = requestAnimationFrame(tick);
     };
     tick();
@@ -178,6 +202,8 @@ export class Recorder {
     this.analyser?.disconnect();
     this.processor = null;
     this.analyser = null;
+    this.endpointer = null;
+    this.onEndpoint = null;
     this.chunks = [];
     void this.context?.close().catch(() => undefined);
     this.context = null;

@@ -1,4 +1,4 @@
-﻿import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { IPC, type ModelPreset } from "../shared/ipc.ts";
 import type { AppConfig, ApprovalResolution, ModuleKey, OverlayState } from "../shared/domain.ts";
@@ -107,6 +107,8 @@ const configPatchSchema = z.object({
   taskRuntime: z.enum(["builtin", "pi"]).optional(),
   narration: z.boolean().optional(),
   ackEnabled: z.boolean().optional(),
+  autoStop: z.boolean().optional(),
+  autoStopSilenceMs: z.number().int().min(300).max(3000).optional(),
   asrLanguage: z.enum(["zh", "en", "auto"]).optional(),
   permissionWindow: z.boolean().optional(),
   approvalTimeoutSec: z.number().int().min(10).max(300).optional(),
@@ -434,6 +436,7 @@ export function registerIpc(deps: IpcDeps): void {
       selectedCount: null,
       lastRun: last ? { title: last.title, state: last.state, ageMs: Date.now() - last.updatedAt } : null,
       hotkey: config.hotkey,
+      autoStop: config.autoStop,
     };
   });
 

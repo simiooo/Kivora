@@ -319,6 +319,10 @@ export interface AppConfig {
   narration: boolean;
   /** 缓存 ack 片段 */
   ackEnabled: boolean;
+  /** 说完自动结束录音（能量包络端点检测，不依赖模型） */
+  autoStop: boolean;
+  /** 静音多久算说完 */
+  autoStopSilenceMs: number;
   asrLanguage: AsrLanguage;
   /** 浮窗（画板 09） */
   permissionWindow: boolean;
@@ -463,6 +467,8 @@ export interface OverlayState {
   selectedCount: number | null;
   lastRun: { title: string; state: SessionState; ageMs: number } | null;
   hotkey: string;
+  /** 说完自动结束开着时，悬浮窗的提示文案要跟着变 */
+  autoStop: boolean;
 }
 
 /* --------------------------------------------------------------- 杂项 */

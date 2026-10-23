@@ -192,6 +192,7 @@ async function runShots(): Promise<void> {
   const routes: Array<[string, string]> = [
     ["", "shot-01-timeline.png"],
     ["/settings", "shot-02-settings.png"],
+    ["/settings/voice", "shot-13-voice.png"],
     ["/settings/models", "shot-03-models.png"],
     [invoice ? `/history/${invoice.id}` : "/history", "shot-04-history.png"],
     ["/onboarding", "shot-05-onboarding.png"],

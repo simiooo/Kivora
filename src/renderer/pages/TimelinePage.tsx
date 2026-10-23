@@ -255,6 +255,8 @@ export function TimelinePage({
         onOpenQueue={() => setQueueOpen(true)}
         onSent={() => undefined}
         onListeningChange={setListening}
+        autoStop={bootstrap.config.autoStop}
+        autoStopSilenceMs={bootstrap.config.autoStopSilenceMs}
       />
 
       <QueuePanel
