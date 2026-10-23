@@ -510,7 +510,12 @@ export function startPiRun(session: Session, hooks: PiRunHooks): void {
 
   // 发任务：RPC 模式的任务文本走 prompt 命令，不走 argv
   void request(run, { type: "prompt", message: buildTaskPrompt(session) }, 60_000).catch((err: Error) => {
-    finish("failed", "Pi 没接下这个任务。", err.message);
+    const noCreds = /api key|login|auth|unauthor|provider/i.test(`${run.stderr}\n${err.message}`);
+    finish(
+      "failed",
+      noCreds ? "Pi 没有可用的模型凭据，先在设置 → 扩展里把模型配好。" : "Pi 没接下这个任务。",
+      run.stderr.trim().slice(-500) || err.message,
+    );
   });
 }
 

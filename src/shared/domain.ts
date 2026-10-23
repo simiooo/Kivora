@@ -325,6 +325,10 @@ export interface AppConfig {
   autoStopSilenceMs: number;
   /** 免按键：麦克风常开，检测到人说话就自动开始识别 */
   handsFree: boolean;
+  /** 只听不记：不把你说的话写进时间线（只留动作和结果） */
+  privateMode: boolean;
+  /** 内置执行器做不了的任务自动转给 Pi 会话 */
+  autoEscalate: boolean;
   asrLanguage: AsrLanguage;
   /** 浮窗（画板 09） */
   permissionWindow: boolean;

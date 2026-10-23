@@ -5,6 +5,7 @@ import { awaitApproval, openApproval } from "./approval-bus.ts";
 import { getConfig } from "../repos/config.ts";
 import { serializeError } from "../../shared/errors.ts";
 import { describeTarget, parseFileTask, scanFiles, transferFiles } from "../tasks/files.ts";
+import { piAvailable } from "../env.ts";
 import { startPiRun } from "./pi-runner.ts";
 
 /**
@@ -238,8 +239,19 @@ export function startTask(session: Session, hooks: RunnerHooks, mode: RunMode): 
     startPiRun(session, wrapped);
     return;
   }
-  if (mode === "real") startRealRun(session, wrapped);
-  else startRun(session, wrapped);
+  if (mode === "mock") {
+    startRun(session, wrapped);
+    return;
+  }
+  // 内置执行器只会搬文件：解析不出来、又装了 Pi，就直接交给 Pi，
+  // 而不是让用户看到"需要浏览器或桌面控制"这种半句话。
+  const config = getConfig();
+  if (config.autoEscalate && piAvailable() && !parseFileTask(session.prompt)) {
+    appendEvent(session.id, "note", "内置执行器做不了，转给 Pi 会话", { escalated: true });
+    startPiRun(session, wrapped);
+    return;
+  }
+  startRealRun(session, wrapped);
 }
 
 /**

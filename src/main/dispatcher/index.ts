@@ -1,4 +1,4 @@
-import type { Message, Session, TurnResult } from "../../shared/domain.ts";
+﻿import type { Message, Session, TurnResult } from "../../shared/domain.ts";
 import { isActive, newId } from "../../shared/domain.ts";
 import {
   appendEvent,
@@ -21,9 +21,10 @@ import { cancelPiRun, isPiRunning, steerPiRun } from "./pi-runner.ts";
 import { mockMode, piAvailable } from "../env.ts";
 import { beginTurn, isCurrentTurn, setThinking } from "../turn-state.ts";
 import { acknowledgmentFor, isQuestion, looksActionable } from "./ack.ts";
+import { setConfig } from "../repos/config.ts";
 import { broadcast, speak } from "../bus.ts";
 import { getConfig } from "../repos/config.ts";
-import { getBoundModel } from "../repos/models.ts";
+import { getBoundModel, updateModel } from "../repos/models.ts";
 import { classify, type BrainDecision } from "./brain.ts";
 import { getSecret, modelSecretName } from "../secrets.ts";
 import { AppError } from "../../shared/errors.ts";
@@ -158,9 +159,11 @@ export async function handleUtterance(
   }
 
   const ticket = beginTurn();
+  // 只听不记：原话不落库，只留一句占位，动作和结果照常记录
+  const privateMode = getConfig().privateMode;
   const user = appendMessage({
     role: "user",
-    content: raw,
+    content: privateMode ? "（只说了一句，没记下来）" : raw,
     source: options.source ?? "text",
     confidence: options.confidence ?? null,
   });
@@ -348,6 +351,32 @@ export async function handleUtterance(
         action: { kind: "promoted", sessionId: target.sessionId, position: 1 },
         spoken: null,
       };
+    }
+
+    case "config": {
+      // 语音改配置（方案 3.11）：只做不需要审批的那几项
+      if (intent.asrLanguage) {
+        setConfig({ asrLanguage: intent.asrLanguage });
+        const label = intent.asrLanguage === "en" ? "英文" : intent.asrLanguage === "zh" ? "中文" : "自动";
+        const text = `好，识别语言切成${label}。`;
+        say(turn, text);
+        return { messages: turn.messages, action: { kind: "none" }, spoken: text };
+      }
+      if (typeof intent.speedDelta === "number") {
+        const model = getBoundModel("tts");
+        if (!model) {
+          const text = "还没绑定语音合成模型，改不了语速。";
+          say(turn, text);
+          return { messages: turn.messages, action: { kind: "none" }, spoken: text };
+        }
+        const current = model.params.speed ?? 1;
+        const next = Math.min(2, Math.max(0.5, Math.round((current + intent.speedDelta) * 10) / 10));
+        updateModel({ ...model, params: { ...model.params, speed: next } });
+        const text = `好，语速调到 ${next} 倍。`;
+        say(turn, text);
+        return { messages: turn.messages, action: { kind: "none" }, spoken: text };
+      }
+      return { messages: turn.messages, action: { kind: "none" }, spoken: null };
     }
 
     case "queue": {

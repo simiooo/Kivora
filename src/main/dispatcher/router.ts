@@ -1,4 +1,4 @@
-import type { ApprovalResolution, Risk, SessionState } from "../../shared/domain.ts";
+﻿import type { ApprovalResolution, AsrLanguage, Risk, SessionState } from "../../shared/domain.ts";
 
 /**
  * 反射路由：零模型、零网络，先跑（3.5）。
@@ -15,6 +15,7 @@ export type Intent =
   | { kind: "queue"; sessionId: string; text: string }
   | { kind: "promote" }
   | { kind: "help" }
+  | { kind: "config"; asrLanguage?: AsrLanguage; speedDelta?: number }
   | { kind: "none" };
 
 export interface RouterContext {
@@ -133,6 +134,19 @@ export function route(text: string, ctx: RouterContext): Intent {
 
   // 6) 帮助
   if (HELP.some((word) => norm === normalize(word))) return { kind: "help" };
+
+  // 6.5) 语音改配置（方案 3.11）：只开放"不需要审批"的那几项
+  if (/(切|换|用|改成).{0,4}(英文|英语)/.test(norm) || norm.includes("english识别")) {
+    return { kind: "config", asrLanguage: "en" };
+  }
+  if (/(切|换|用|改成).{0,4}(中文|汉语)/.test(norm)) {
+    return { kind: "config", asrLanguage: "zh" };
+  }
+  if (norm.includes("识别") && norm.includes("自动")) {
+    return { kind: "config", asrLanguage: "auto" };
+  }
+  if (/语速(快|快一点|快点|加快)/.test(norm)) return { kind: "config", speedDelta: 0.1 };
+  if (/语速(慢|慢一点|慢点|放慢)/.test(norm)) return { kind: "config", speedDelta: -0.1 };
 
   // 7) 默认：建任务。说"先/马上/立刻"视为插队
   const preempt = /^(先|马上|立刻|现在先)/.test(norm);

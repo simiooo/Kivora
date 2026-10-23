@@ -10,6 +10,8 @@ export const CONFIG_DEFAULTS: AppConfig = {
   autoStop: true,
   autoStopSilenceMs: 800,
   handsFree: false,
+  privateMode: false,
+  autoEscalate: true,
   asrLanguage: "zh",
   permissionWindow: true,
   approvalTimeoutSec: 45,

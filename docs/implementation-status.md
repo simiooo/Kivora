@@ -28,20 +28,20 @@
 | 淡出抢占（新语音抢旧语音） | squent 3.9 | `playClip` → `stopPlayback(60)` 音量渐降 | 手动 |
 | 分级退避 / 熔断 / 错误归一化 | squent 3.10 | `providers/http.ts` | 单测 + flow |
 | 幂等：只重试单次 provider 请求 | squent 3.10 | 同上 | 代码结构 |
+| **只听不记** | voice 1.2 | `privateMode`：原话不落库，只留"（只说了一句，没记下来）"占位；动作与结果照常记录 | 设置开关 |
+| **内置做不了 → 自动转 Pi** | squent 5.2 / CUA | `runner.startTask()`：`autoEscalate` 且装了 Pi 且解析不出文件任务时直接走 Pi 会话，事件里留「转给 Pi」 | flow（接不了的指令走 Pi 失败） |
+| **语音改配置（§3.11 子集）** | squent 3.11 | 反射路由 `config`：切识别语言（中/英/自动）、语速 ±0.1；热键/目录/Key 仍只走设置页 | router.test |
 
 ## 二、设计有、还没做的（明确缺口）
 
-| 设计项 | 出处 | 现状 | 建议 |
+| 设计项 | 出处 | 现状 | 为什么先不做 / 下一步 |
 |---|---|---|---|
-| **唤醒词"小栗"** | voice 1.2 | 只做了 VAD 触发，没有唤醒词：开口就进，不需要叫名字 | 需要本地小模型（Porcupine / openWakeWord）；或先接受"VAD 即唤醒"，写进已知边界 |
-| **ASR partial 预判** | voice 2.2 / squent 3.9 | 现在是"录完整段 WAV 再上传"，没有流式 partial | DashScope 有实时识别通道（`realtime-plus`）；要接就得改成流式 + 预判，属于下一阶段 |
-| **A0–A3 响应阶梯 / Cost Router** | voice 0 / 1.2 | 固定一套模型栈（brain + task + asr + tts），没有按任务时长选 ack 级别 | 先保留单栈；等有多种模型再谈 |
-| **6 层上下文栈 + 稳定前缀 ≥80% 命中** | voice 2.3 | brain 只带一句 `describeContext()`；Pi 会话自带上下文 | 影响的是成本不是功能，优先级低 |
-| **L2/L3 实时通道 ≤3%** | voice 0 | 未接入实时 ASR；TTS 是整段合成 | 同上，属于成本优化 |
-| **"只听不记"（不写 transcript）** | voice 1.2 | 没有：转录都会写库 | 加一个 `privateMode` 开关，写库前丢弃文本 |
-| **执行器覆盖面** | squent 1.1（三条黄金路径） | 内置执行器只认文件整理；搜索/读消息要靠 Pi 会话。没配 Pi 时其它指令只能如实失败 | 失败文案已改成"说明现在能做什么"，覆盖面靠 Pi + MCP 补齐 |
-| **语音改配置（§3.11）** | squent 3.11 | 没有：说"换个男声"不会改配置 | 反射路由加几条：音色/语言/热键，热键走审批 |
-| **取景框 / 虚拟光标 / 4 类轻提示** | voice 0 / 1 | 未做（overlay 只有胶囊 + 卡片） | 需要 MCP/桌面控制先到位 |
+| **唤醒词"小栗"** | voice 1.2 | 只做 VAD 触发：开口就进，不用叫名字 | 唤醒词要本地小模型（Porcupine 需商业 key；openWakeWord 需 ONNX 运行时 + 训练）。当前选择「VAD 即唤醒」，隐私靠"自己播报时不听 + 30 分钟自动退回"护栏。要上唤醒词就换 `wake.ts` 一个文件 |
+| **ASR partial 预判** | voice 2.2 / squent 3.9 | 录完整段 WAV 再上传，没有流式 partial | 要接 DashScope 实时识别（`realtime-plus` WS + 二进制流 + `result-generated` 的 partial），再在 partial 上做意图预判。属于下一阶段的结构改动 |
+| **A0–A3 响应阶梯 / Cost Router** | voice 0 / 1.2 | 固定单模型栈；ack 固定 400ms 一条 | 属于成本优化，功能上已够用；等接入多模型/多通道再谈 |
+| **6 层上下文栈 + 稳定前缀 ≥80% 命中** | voice 2.3 | brain 只带一句 `describeContext()`；Pi 会话自带上下文 | 影响的是账单不是功能 |
+| **L2/L3 实时通道 ≤3%** | voice 0 | 未接入实时 ASR；TTS 整段合成 | 同上 |
+| **取景框 / 虚拟光标 / 4 类轻提示** | voice 0 / 1 | 未做（overlay 只有常驻卡片） | 要等 Pi + MCP 的桌面控制先稳定 |
 
 ## 三、怎么避免再次脱节
 

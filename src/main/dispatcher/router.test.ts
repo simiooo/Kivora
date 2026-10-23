@@ -78,6 +78,22 @@ describe("反射路由", () => {
   it("空话什么都不做", () => {
     expect(route("   ", idle)).toEqual({ kind: "none" });
   });
+
+  it("语音改配置：识别语言", () => {
+    expect(route("切成英文识别", idle)).toEqual({ kind: "config", asrLanguage: "en" });
+    expect(route("用中文识别", idle)).toEqual({ kind: "config", asrLanguage: "zh" });
+    expect(route("识别语言改成自动", idle)).toEqual({ kind: "config", asrLanguage: "auto" });
+  });
+
+  it("语音改配置：语速", () => {
+    expect(route("语速快一点", idle)).toEqual({ kind: "config", speedDelta: 0.1 });
+    expect(route("语速慢一点", idle)).toEqual({ kind: "config", speedDelta: -0.1 });
+  });
+
+  it("改配置的话不会被当成任务去执行", () => {
+    expect(route("切成英文识别", idle).kind).not.toBe("create_task");
+    expect(route("语速快一点", running).kind).toBe("config");
+  });
 });
 
 describe("状态口语化", () => {

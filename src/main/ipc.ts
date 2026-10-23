@@ -1,4 +1,4 @@
-﻿import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { IPC, type ModelPreset } from "../shared/ipc.ts";
 import type { AppConfig, ApprovalResolution, ModuleKey, OverlayState } from "../shared/domain.ts";
@@ -111,6 +111,8 @@ const configPatchSchema = z.object({
   autoStop: z.boolean().optional(),
   autoStopSilenceMs: z.number().int().min(300).max(3000).optional(),
   handsFree: z.boolean().optional(),
+  privateMode: z.boolean().optional(),
+  autoEscalate: z.boolean().optional(),
   asrLanguage: z.enum(["zh", "en", "auto"]).optional(),
   permissionWindow: z.boolean().optional(),
   approvalTimeoutSec: z.number().int().min(10).max(300).optional(),

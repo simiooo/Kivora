@@ -229,6 +229,12 @@ function GeneralSection({
 
       <Card>
         <ToggleRow
+          title="内置做不了就转给 Pi"
+          description="内置执行器只会搬文件。遇到搜索、浏览器、读消息这类它做不了的任务，自动交给 Pi 会话，而不是直接失败。没装 Pi 时这条不起作用。"
+          checked={bootstrap.config.autoEscalate}
+          onChange={(value) => void patch({ autoEscalate: value })}
+        />
+        <ToggleRow
           title="先出声"
           description="模型一有文字就先播第一句；没有旁白时用缓存短句顶上。关掉就只在结束时说话。"
           checked={bootstrap.config.narration}
@@ -379,6 +385,16 @@ function VoiceSection({
           checked={bootstrap.config.handsFree}
           onChange={(value) =>
             void onConfig({ handsFree: value }).catch((err) =>
+              toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
+            )
+          }
+        />
+        <ToggleRow
+          title="只听不记"
+          description="你说的话不写进时间线，只保留动作和结果。适合旁边有人、或者你不想让原话留在本地数据库里的时候。"
+          checked={bootstrap.config.privateMode}
+          onChange={(value) =>
+            void onConfig({ privateMode: value }).catch((err) =>
               toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
             )
           }
