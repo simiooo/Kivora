@@ -227,6 +227,24 @@ export async function runFlow(): Promise<number> {
     6000,
   );
   check("接不了的指令如实失败", unsupportedFailed, noMatchId ? (getSession(noMatchId)?.error?.message ?? "") : "");
+  // 内置执行器解析不了这类指令：应当自动转给 Pi，而不是直接判"没接"
+  const escalated =
+    noMatchId !== null &&
+    listSessionEvents(noMatchId).some((event) => event.type === "note" && event.payload.escalated === true);
+  check("内置做不了会转给 Pi", escalated, noMatchId ? "" : "没有会话");
+
+  // 只听不记：原话不落库，只留占位
+  setConfig({ privateMode: true });
+  const secret = await handleUtterance("这句话不应该被存下来", { source: "voice" });
+  setConfig({ privateMode: false });
+  const secretId = secret.action.kind === "task_created" ? secret.action.sessionId : null;
+  const stored = listTimeline(6).filter((message) => message.role === "user").map((message) => message.content);
+  check(
+    "只听不记时原话不落库",
+    stored.some((content) => content.includes("没记下来")) && !stored.some((content) => content.includes("不应该被存下来")),
+    stored.join(" | ").slice(0, 60),
+  );
+  if (secretId) cancelTaskById(secretId);
 
   // 12. Pi 执行器：用假 pi 跑一遍协议解析（真实 pi 需要凭据，CI 里没有）
   const piDir = fs.mkdtempSync(path.join(os.tmpdir(), "kivora-pi-"));

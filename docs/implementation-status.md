@@ -1,4 +1,4 @@
-# 设计与实现的对账表
+﻿# 设计与实现的对账表
 
 > 用途：设计文档写过的东西，代码里到底有没有。每改一次交互就来这里对一遍，
 > 别再出现"方案里写了、实现里没有、靠用户发现"的情况。
@@ -31,7 +31,7 @@
 | 淡出抢占（新语音抢旧语音） | squent 3.9 | `playClip` → `stopPlayback(60)` 音量渐降 | 手动 |
 | 分级退避 / 熔断 / 错误归一化 | squent 3.10 | `providers/http.ts` | 单测 + flow |
 | 幂等：只重试单次 provider 请求 | squent 3.10 | 同上 | 代码结构 |
-| **只听不记** | voice 1.2 | `privateMode`：原话不落库，只留"（只说了一句，没记下来）"占位；动作与结果照常记录 | 设置开关 |
+| **只听不记** | voice 1.2 | `privateMode`：原话不落库，只留"（只说了一句，没记下来）"占位；动作与结果照常记录 | 设置开关、flow 断言 |
 | **内置做不了 → 自动转 Pi** | squent 5.2 / CUA | `runner.startTask()`：`autoEscalate` 且装了 Pi 且解析不出文件任务时直接走 Pi 会话，事件里留「转给 Pi」 | flow（接不了的指令走 Pi 失败） |
 | **Pi 凭据桥接** | squent 5.4 | `pi-config.ts` 按 baseUrl 域名把绑定的任务模型映射成 Pi 的 `provider/model`，Key 从 DPAPI 取出来只经环境变量传（`DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`），不落盘 | pi-config.test；手动验证：假 Key 下 Pi 收到 DeepSeek 的 401，说明 provider 与模型名都对 |
 | **语音改配置（§3.11 子集）** | squent 3.11 | 反射路由 `config`：切识别语言（中/英/自动）、语速 ±0.1；热键/目录/Key 仍只走设置页 | router.test |

@@ -40,6 +40,7 @@ export function Composer({
   const [draft, setDraft] = useState("");
   const [recording, setRecording] = useState(false);
   const [level, setLevel] = useState(0);
+  const [partial, setPartial] = useState("");
   const [sending, setSending] = useState(false);
   const [mics, setMics] = useState<MicDevice[]>([]);
   const [micId, setMicId] = useState<string>(() => window.localStorage.getItem("kivora.mic") ?? "");
@@ -104,7 +105,9 @@ export function Composer({
       return;
     }
     setRecording(true);
-    setLevel(0);    // 识别模型是流式的就边说边传；不是、或者服务没起来，就退回"录完再传"
+    setLevel(0);
+    setPartial("");
+    // 识别模型是流式的就边说边传；不是、或者服务没起来，就退回"录完再传"
     const stream = await bridge.asrStreamStart().catch(() => ({ streaming: false as const }));
     streamRef.current = stream.streaming ? stream.id : null;
     // 唤醒词门只能建在流式识别上（先听一小段再决定要不要继续）
@@ -188,6 +191,7 @@ export function Composer({
     }
     setRecording(false);
     setLevel(0);
+    setPartial("");
     bridge.reportLevel(0);
     const streamId = streamRef.current;
     streamRef.current = null;
@@ -235,12 +239,13 @@ export function Composer({
     bridge.reportLevel(0);
   }, []);
 
-  // 唤醒词门：流式识别的中间结果里出现名字就放行，超时没出现就整段丢掉
+  // 流式识别的中间结果：一边显示"边说边出字"，一边给唤醒词门做判断
   useEffect(() => {
-    if (!wakeRequired) return;
     return bridge.subscribe((event) => {
-      if (event.kind !== "voice" || !wakeRef.current.active || wakeRef.current.armed) return;
-      if (typeof event.partial !== "string" || !containsWakeWord(event.partial, wakeWord)) return;
+      if (event.kind !== "voice" || typeof event.partial !== "string") return;
+      setPartial(event.partial);
+      if (!wakeRequired || !wakeRef.current.active || wakeRef.current.armed) return;
+      if (!containsWakeWord(event.partial, wakeWord)) return;
       wakeRef.current.armed = true;
       window.clearTimeout(wakeRef.current.timer);
     });
@@ -366,7 +371,12 @@ export function Composer({
             )}
           >
             {recording ? (
-              <Waveform level={level} />
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <Waveform level={level} />
+                {partial ? (
+                  <span className="min-w-0 flex-1 truncate text-[14px] text-foreground/80">{partial}</span>
+                ) : null}
+              </div>
             ) : (
               <input
                 ref={inputRef}

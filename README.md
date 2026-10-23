@@ -67,7 +67,7 @@ pnpm start      # 跑构建产物
 
 pnpm typecheck  # tsc
 pnpm test       # vitest：路由 / 文本规则 / 仓储 / 文件边界 / 协议
-pnpm flow       # 不开窗，直接把调度器跑一遍（40 条断言：真实搬文件、超时、Pi 协议）
+pnpm flow       # 不开窗，直接把调度器跑一遍（42 条断言：真实搬文件、超时、Pi 协议、转 Pi 降级、只听不记）
 pnpm smoke      # 启动 → 截图 → 退出（CI 闸门）
 pnpm shots      # 十一个界面全截图到 artifacts/
 ```
