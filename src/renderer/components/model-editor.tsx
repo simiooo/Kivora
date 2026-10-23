@@ -172,7 +172,7 @@ export function ModelEditor({
       setTestResult({
         ok: result.ok,
         text: result.ok
-          ? `${result.simulated ? "模拟通过" : "通过"} · 延迟 ${result.latencyMs}ms`
+          ? `通过 · 延迟 ${result.latencyMs}ms`
           : `${result.error?.message ?? "连接失败"}`,
       });
       toast.push({

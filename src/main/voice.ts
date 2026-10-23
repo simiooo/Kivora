@@ -1,6 +1,7 @@
 import type { SpeechClip, Transcript } from "../shared/domain.ts";
 import { AppError, serializeError } from "../shared/errors.ts";
 import { getConfig } from "./repos/config.ts";
+import { mockMode } from "./env.ts";
 import { getBoundModel } from "./repos/models.ts";
 import { getSecret, modelSecretName } from "./secrets.ts";
 import { mockTone, synthesize, transcribe } from "./providers/audio.ts";
@@ -42,7 +43,7 @@ export async function transcribeAudio(audio: Uint8Array, mime: string): Promise<
     };
   }
 
-  if (config.mockMode) {
+  if (mockMode()) {
     await new Promise((resolve) => setTimeout(resolve, 220));
     return {
       text: nextMockUtterance(),
@@ -108,13 +109,12 @@ const speechCache = new Map<string, { base64: string; mime: string }>();
 const SPEECH_CACHE_LIMIT = 40;
 
 export async function synthesizeSpeech(text: string): Promise<SpeechClip> {
-  const config = getConfig();
   const trimmed = text.trim();
   if (!trimmed) {
     return { ok: false, audioBase64: null, mime: "audio/wav", cached: false, durationMs: 0, error: null };
   }
 
-  if (config.mockMode) {
+  if (mockMode()) {
     const key = `mock:${trimmed}`;
     const cached = speechCache.get(key);
     if (cached) {

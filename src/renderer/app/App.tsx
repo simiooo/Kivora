@@ -38,7 +38,6 @@ export default function App(): React.JSX.Element {
       return (
         <OnboardingPage
           bootstrap={data}
-          onConfig={patchConfig}
           onFinish={async () => {
             await bridge.completeSetup();
             await reload();

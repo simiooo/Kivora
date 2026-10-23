@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Mic, PlugZap } from "lucide-react";
 import type { Bootstrap } from "@shared/ipc.ts";
-import type { AppConfig, ModelRecord } from "@shared/domain.ts";
+import type { ModelRecord } from "@shared/domain.ts";
 import { formatHotkey } from "@shared/text.ts";
 import { DEFAULT_PARAMS } from "@shared/domain.ts";
 import { defaultVoiceFor } from "@shared/voice-catalog.ts";
@@ -19,12 +19,10 @@ const STEPS = [
 
 export function OnboardingPage({
   bootstrap,
-  onConfig,
   onFinish,
   onSkip,
 }: {
   bootstrap: Bootstrap;
-  onConfig: (patch: Partial<AppConfig>) => Promise<void>;
   onFinish: () => Promise<void>;
   onSkip: () => Promise<void>;
 }): React.JSX.Element {
@@ -96,7 +94,7 @@ export function OnboardingPage({
                 }
               />
             ) : null}
-            {step === 2 ? <DoneStep model={model} bound={bound} bootstrap={bootstrap} onConfig={onConfig} /> : null}
+            {step === 2 ? <DoneStep model={model} bound={bound} bootstrap={bootstrap} /> : null}
           </div>
 
           <div className="sticky bottom-0 z-10 -mx-10 mt-8 flex items-center gap-3 border-t border-border/60 bg-background/95 px-10 py-4 backdrop-blur">
@@ -257,15 +255,13 @@ function ConnectStep({
         apiKey: apiKey.trim() || undefined,
       });
       const testResult = await bridge.testModel(saved.id);
-      const real = testResult.ok && !testResult.simulated;
+      const real = testResult.ok;
       const failure = testResult.error;
       setResult({
         ok: real,
         text: real
           ? `连接正常 · ${testResult.latencyMs}ms`
-          : testResult.ok
-            ? "模拟通过：没填 Key，不会真的发请求，所以也不会绑上去"
-            : `${failure?.message ?? "连接失败"}${failure?.detail ? `（${failure.detail.split("\n")[0]}）` : ""}`,
+          : `${failure?.message ?? "连接失败"}${failure?.detail ? `（${failure.detail.split("\n")[0]}）` : ""}`,
       });
       if (real) {
         // 真连上了才绑定：调度和任务共用这个模型，否则任务会话还在用种子模型
@@ -273,8 +269,8 @@ function ConnectStep({
         await bridge.bindModel("task", saved.id);
         onModel(saved, true);
         toast.push({ tone: "success", title: "模型接上了", detail: "已绑定调度 LLM 和任务模型" });
-      } else if (testResult.ok) {
-        // 只是保存，不动绑定；等填了 Key 再连
+      } else {
+        // 只保存，不动绑定；等配好了再连
         onModel(saved, false);
       }
     } catch (err) {
@@ -378,7 +374,7 @@ function ConnectStep({
       </div>
 
       <p className="mt-8 text-[11px] leading-5 text-faint">
-        先跳过也行：演练模式会把整条流程走通，只是不真的发请求。
+        先跳过也行：之后在设置里补模型和语音，随时能回到这里。
       </p>
     </div>
   );
@@ -515,29 +511,11 @@ function DoneStep({
   model,
   bound,
   bootstrap,
-  onConfig,
 }: {
   model: ModelRecord | null;
   bound: boolean;
   bootstrap: Bootstrap;
-  onConfig: (patch: Partial<AppConfig>) => Promise<void>;
 }): React.JSX.Element {
-  const mock = bootstrap.config.mockMode;
-  const [voiceReady, setVoiceReady] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    void Promise.all([bridge.listModels(), bridge.listBindings()])
-      .then(([models, bindings]) => {
-        const hasKey = (module: "asr" | "tts"): boolean => {
-          const binding = bindings.find((item) => item.module === module);
-          const bound = models.find((item) => item.id === binding?.modelId);
-          return Boolean(bound?.hasKey);
-        };
-        setVoiceReady(hasKey("asr") && hasKey("tts"));
-      })
-      .catch(() => setVoiceReady(false));
-  }, []);
-
   return (
     <div className="space-y-2">
       <Row label="模型" value={model ? `${model.name} · ${model.modelId}` : "还没连"} />
@@ -547,27 +525,7 @@ function DoneStep({
       />
       <Row label="热键" value={formatHotkey(bootstrap.config.hotkey)} />
       <Row label="审批" value={bootstrap.config.permissionWindow ? "浮窗 + 语音都能答" : "只在主窗里出卡片"} />
-
-      <div className="mt-4 rounded-[12px] bg-card px-4 py-3">
-        <div className="flex items-start gap-6">
-          <div className="min-w-0 flex-1">
-            <div className="text-[13px] text-foreground">用真实模型</div>
-            <p className="mt-1 text-[12px] leading-5 text-faint">
-              {mock
-                ? voiceReady === false
-                  ? "语音识别 / 合成还没配 Key：现在只能留在演练模式，去设置 → 模型里补上再回来打开。"
-                  : "现在还是演练模式：转写用内置句子、任务按脚本走，模型只在「测试连接」时用过。打开后才会真的发请求。"
-                : "已经在用真实端点。识别和合成也要有 Key，否则语音这一路会报错——在设置 → 模型里配。"}
-            </p>
-          </div>
-          <Switch
-            checked={!mock}
-            label="用真实模型"
-            disabled={voiceReady === false && mock}
-            onChange={(value) => void onConfig({ mockMode: !value })}
-          />
-        </div>
-      </div>
+      <Row label="语音" value="识别/合成没配 Key 也能打字，只是不会听也不会说" />
 
       <p className="pt-4 text-[12px] leading-6 text-muted-foreground">
         按热键说一句就行。说「刚才那个做完了吗」能查进度，说「停」能停，说「先做这个」会插队。

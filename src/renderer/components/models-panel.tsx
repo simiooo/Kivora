@@ -39,7 +39,7 @@ export function ModelsPanel(): React.JSX.Element {
       toast.push({
         tone: result.ok ? "success" : "error",
         title: result.ok ? `「${model.name}」通了` : `「${model.name}」连不上`,
-        detail: result.ok ? `延迟 ${result.latencyMs}ms${result.simulated ? "（模拟）" : ""}` : (result.error?.message ?? ""),
+        detail: result.ok ? `延迟 ${result.latencyMs}ms` : (result.error?.message ?? ""),
       });
     } catch (err) {
       toast.push({ tone: "error", title: "测试失败", detail: toUiError(err).message });

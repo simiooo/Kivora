@@ -3,7 +3,6 @@ import type { AppConfig } from "../../shared/domain.ts";
 
 export const CONFIG_DEFAULTS: AppConfig = {
   hotkey: "Control+Alt+K",
-  mockMode: true,
   onboardingDone: false,
   taskRuntime: "builtin",
   narration: true,

@@ -40,6 +40,7 @@ import { getSecret, modelSecretName } from "./secrets.ts";
 import { listServers, mcpCapability, MCP_PRESETS, removeServer, saveServer } from "./mcp.ts";
 import { assertProbeable, probeMcpServer } from "./mcp-client.ts";
 import { probeModel } from "./providers/probe.ts";
+import { mockMode } from "./env.ts";
 import { synthesizeSpeech, transcribeAudio } from "./voice.ts";
 import { broadcast } from "./bus.ts";
 import { focusMain, hideOverlay, refreshPermissionWindow, showOverlay } from "./windows.ts";
@@ -102,7 +103,6 @@ const mcpServerSchema = z.object({
 
 const configPatchSchema = z.object({
   hotkey: z.string().trim().min(1).max(80).optional(),
-  mockMode: z.boolean().optional(),
   onboardingDone: z.boolean().optional(),
   taskRuntime: z.enum(["builtin", "pi"]).optional(),
   narration: z.boolean().optional(),
@@ -321,7 +321,7 @@ export function registerIpc(deps: IpcDeps): void {
     const id = parse(modelId, raw);
     const model = getModel(id);
     if (!model) throw new AppError("not_found", { message: "这个模型已经不在了。" });
-    const result = await probeModel(model, getSecret(modelSecretName(id)), getConfig().mockMode);
+    const result = await probeModel(model, getSecret(modelSecretName(id)), mockMode());
     broadcast("models");
     return result;
   });
@@ -330,7 +330,7 @@ export function registerIpc(deps: IpcDeps): void {
     const models = listModels();
     const results = [];
     for (const model of models) {
-      results.push(await probeModel(model, getSecret(modelSecretName(model.id)), getConfig().mockMode));
+      results.push(await probeModel(model, getSecret(modelSecretName(model.id)), mockMode()));
     }
     broadcast("models");
     return results;
@@ -434,7 +434,6 @@ export function registerIpc(deps: IpcDeps): void {
       selectedCount: null,
       lastRun: last ? { title: last.title, state: last.state, ageMs: Date.now() - last.updatedAt } : null,
       hotkey: config.hotkey,
-      mock: config.mockMode,
     };
   });
 

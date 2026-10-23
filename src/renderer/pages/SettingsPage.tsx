@@ -229,12 +229,6 @@ function GeneralSection({
 
       <Card>
         <ToggleRow
-          title="演练模式"
-          description="不发真实请求：转写用内置句子，语音只播提示音，任务按脚本走。关掉后文件整理会真的动文件，每一步都要你确认。"
-          checked={bootstrap.config.mockMode}
-          onChange={(value) => void patch({ mockMode: value })}
-        />
-        <ToggleRow
           title="先出声"
           description="模型一有文字就先播第一句；没有旁白时用缓存短句顶上。关掉就只在结束时说话。"
           checked={bootstrap.config.narration}
@@ -413,9 +407,7 @@ function VoiceSection({
         </div>
 
         <div className="py-4 text-[11px] leading-5 text-faint">
-          {bootstrap.config.mockMode
-            ? "mock 模式下不会真的合成，只会播一段提示音。"
-            : "音色和语速在模型详情里改（语音合成类模型的那两个参数）。"}
+          音色和语速在模型详情里改（语音合成类模型的那两个参数）。
         </div>
       </Card>
     </div>
@@ -760,11 +752,7 @@ function AboutSection({ bootstrap }: { bootstrap: Bootstrap }): React.JSX.Elemen
     ["Pi 内核", bootstrap.state.piAvailable ? `内置 ${bootstrap.state.piVersion ?? ""}（随应用发布）` : "缺失"],
     [
       "任务执行器",
-      bootstrap.config.mockMode
-        ? "演练模式（不发真实请求）"
-        : bootstrap.config.taskRuntime === "pi"
-          ? "Pi 会话"
-          : "内置（文件整理）",
+      bootstrap.config.taskRuntime === "pi" ? "Pi 会话" : "内置（文件整理）",
     ],
     ["凭据", bootstrap.state.secretsAvailable ? "Windows 凭据管理器（DPAPI）" : "不可用，Key 以明文存本地"],
     ["数据库", displayPath(bootstrap.state.dbPath, 56)],

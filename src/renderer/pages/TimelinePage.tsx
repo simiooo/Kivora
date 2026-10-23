@@ -87,7 +87,6 @@ export function TimelinePage({
     if (!bootstrap.state.secretsAvailable) {
       return { text: "系统凭据服务不可用，API Key 现在只能以明文保存在本地数据库里。", action: "看设置" };
     }
-    if (bootstrap.config.mockMode) return null;
     const list = bindings.data ?? [];
     const all = models.data ?? [];
     for (const module of ["brain", "asr", "tts", "task"] as const) {
@@ -100,7 +99,7 @@ export function TimelinePage({
       }
     }
     return null;
-  }, [bindings.data, models.data, bootstrap.config.mockMode, bootstrap.state.secretsAvailable]);
+  }, [bindings.data, models.data, bootstrap.state.secretsAvailable]);
 
   const send = useCallback(
     async (text: string) => {
@@ -126,7 +125,6 @@ export function TimelinePage({
         </span>
 
         <div className="no-drag ml-auto flex items-center gap-2">
-          {bootstrap.config.mockMode ? <Chip tone="muted">mock</Chip> : null}
           <Chip tone="muted" className="font-mono">
             {formatHotkey(bootstrap.config.hotkey)}
           </Chip>

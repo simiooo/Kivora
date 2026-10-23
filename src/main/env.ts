@@ -58,3 +58,33 @@ export function piUsesShell(): boolean {
 export function piAvailable(): boolean {
   return Boolean(process.env.KIVORA_PI_BIN) || piCli !== null;
 }
+
+/* ------------------------------------------------------------ 演练模式 */
+
+/**
+ * 演练模式（mock）不是产品功能，是开发自检用的开关：
+ *   KIVORA_MOCK=1 pnpm dev
+ * 打开后转写返回内置句子、合成返回提示音、任务按脚本走、测试连接只做本地模拟。
+ *
+ * 它**不进配置、不进 IPC、不进 UI** —— 用户既看不到也切不了，
+ * 正式安装包里没有环境变量就是纯真实链路。
+ */
+let selfCheckMock: boolean | null = null;
+
+function envMock(): boolean {
+  const raw = process.env.KIVORA_MOCK?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+export function mockMode(): boolean {
+  return selfCheckMock ?? envMock();
+}
+
+/** 只给 `--flow` 这类进程内自检用；应用层（IPC / 渲染层）碰不到这个函数。传 null 恢复读环境变量 */
+export function setMockModeForSelfCheck(value: boolean | null): void {
+  selfCheckMock = value;
+}
+
+export function logMockMode(): void {
+  if (mockMode()) console.log("[kivora] mock mode (KIVORA_MOCK) — 不发真实请求");
+}

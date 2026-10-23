@@ -18,7 +18,7 @@ import { currentApproval, answerById, cancelApprovalsForSession } from "./approv
 import { route, renderStatus, type RouterContext } from "./router.ts";
 import { cancelRun, isRunning, pickScenario, startTask } from "./runner.ts";
 import { cancelPiRun, isPiRunning, steerPiRun } from "./pi-runner.ts";
-import { piAvailable } from "../env.ts";
+import { mockMode, piAvailable } from "../env.ts";
 import { broadcast, speak } from "../bus.ts";
 import { getConfig } from "../repos/config.ts";
 import { getBoundModel } from "../repos/models.ts";
@@ -91,7 +91,7 @@ function taskIsRunning(id: string): boolean {
 
 function currentMode(): "mock" | "real" | "pi" {
   const config = getConfig();
-  if (config.mockMode) return "mock";
+  if (mockMode()) return "mock";
   return config.taskRuntime === "pi" && piAvailable() ? "pi" : "real";
 }
 
@@ -137,8 +137,7 @@ export function pump(): void {
 }
 
 async function brainDecision(text: string, context: string): Promise<{ action: string; title?: string; speech?: string } | null> {
-  const config = getConfig();
-  if (config.mockMode) return null;
+  if (mockMode()) return null;
   const model = getBoundModel("brain");
   if (!model) return null;
   const key = getSecret(modelSecretName(model.id));
@@ -350,7 +349,7 @@ export async function handleUtterance(
 
       const scenario = pickScenario(intent.text);
       let finalTitle = title;
-      if (!getConfig().mockMode) {
+      if (!mockMode()) {
         const decision = await brainDecision(intent.text, "没有正在跑的任务");
         if (decision?.speech) scenario.narration = decision.speech;
         if (decision?.title) {

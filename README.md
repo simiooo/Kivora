@@ -1,4 +1,4 @@
-# Kivora
+﻿# Kivora
 
 <img src="docs/assets/icon/kivora-256.png" width="88" alt="Kivora" />
 
@@ -66,13 +66,15 @@ pnpm build      # dist/（三个窗口）+ dist-electron/（main、preload）
 pnpm start      # 跑构建产物
 
 pnpm typecheck  # tsc
-pnpm test       # vitest：59 个用例（路由 / 文本规则 / 仓储 / 文件边界）
-pnpm flow       # 不开窗，直接把调度器跑一遍（33 条断言：真实搬文件、超时、Pi 协议）
+pnpm test       # vitest：路由 / 文本规则 / 仓储 / 文件边界 / 协议
+pnpm flow       # 不开窗，直接把调度器跑一遍（40 条断言：真实搬文件、超时、Pi 协议）
 pnpm smoke      # 启动 → 截图 → 退出（CI 闸门）
-pnpm shots      # 七个界面全截图到 artifacts/
+pnpm shots      # 十一个界面全截图到 artifacts/
 ```
 
-首次启动会进引导。想先看东西，引导里点「跳过这一步」即可（默认演练模式，不会动真文件）。
+首次启动会进引导。没有 Key 也能装完、能打字，只是不会听也不会说——语音识别/合成绑定的模型必须有 Key。
+
+`KIVORA_MOCK=1 pnpm dev` 是**开发自检**用的开关：转写返回内置句子、合成返回提示音、任务按脚本走、`测试连接`只做本地模拟。它只认环境变量，**不在设置里、不写数据库、不进安装包**；正式运行时这条链路不存在。
 
 ## 架构
 

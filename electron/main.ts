@@ -6,7 +6,7 @@ import { closeStore, openStore, pruneOldData, recoverOrphanSessions } from "../s
 import { dedupeModels, migrateDeepSeekModelIds, migrateLegacyVoiceSeeds, repairTtsVoices, seedModels } from "../src/main/repos/models.ts";
 import { initSecrets } from "../src/main/secrets.ts";
 import { getConfig, setConfig } from "../src/main/repos/config.ts";
-import { initPi } from "../src/main/env.ts";
+import { initPi, logMockMode, setMockModeForSelfCheck } from "../src/main/env.ts";
 import {
   createMainWindow,
   createTray,
@@ -174,7 +174,8 @@ async function loadRoute(win: BrowserWindow, route: string): Promise<void> {
 }
 
 async function runShots(): Promise<void> {
-  setConfig({ onboardingDone: true, mockMode: true });
+  setConfig({ onboardingDone: true });
+  setMockModeForSelfCheck(true);
   // 截图用的 pi 配置写到临时目录，别碰用户真实的 ~/.pi
   process.env.KIVORA_PI_HOME = path.join(app.getPath("userData"), "pi-home");
   saveServer(MCP_PRESETS.find((preset) => preset.key === "playwright")!.server);
@@ -295,6 +296,7 @@ app.whenReady().then(async () => {
   console.log(`[kivora] store ${info.dbPath} schema v${info.schemaVersion}`);
 
   initPi(app.getAppPath());
+  logMockMode();
   await initSecrets();
   const recovered = recoverOrphanSessions();
   if (recovered) console.warn(`[kivora] marked ${recovered} orphaned sessions as failed`);
@@ -347,7 +349,8 @@ app.whenReady().then(async () => {
       if (kind === "approvals") refreshPermissionWindow();
     });
     registerIpc({ applyHotkey: (accelerator) => registerHotkey(accelerator) });
-    setConfig({ onboardingDone: true, mockMode: true });
+    setConfig({ onboardingDone: true });
+  setMockModeForSelfCheck(true);
     seedDemoData();
     const win = createMainWindow();
     await wait(1400);

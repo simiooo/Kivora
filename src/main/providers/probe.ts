@@ -11,13 +11,21 @@ import { setTestResult } from "../repos/models.ts";
  * - asr：0.4 秒静音，几乎不花钱
  * - tts：合成一个"好"，验证能返回音频字节
  * DashScope 的语音走 WebSocket，用同一套"静音 / 一个好"做探测。
+/**
+ * 测试连接 = 真的打一次端点，而不是 ping 域名：
+ * - chat：一次极小的补全
+ * - asr：0.4 秒静音，几乎不花钱
+ * - tts：合成一个"好"，验证能返回音频字节
+ * DashScope 的语音走 WebSocket，用同一套"静音 / 一个好"做探测。
+ *
+ * mock 只由 `KIVORA_MOCK` 打开（见 env.ts），没有 Key 时直接判过，供自检使用。
  */
 export async function probeModel(model: ModelRecord, apiKey: string | null, mockMode: boolean): Promise<TestResult> {
   const at = Date.now();
   if (mockMode && !apiKey) {
     const latency = 180 + Math.round(Math.random() * 160);
     setTestResult(model.id, "ok", latency);
-    return { modelId: model.id, ok: true, latencyMs: latency, error: null, at, simulated: true };
+    return { modelId: model.id, ok: true, latencyMs: latency, error: null, at };
   }
 
   const startedAt = Date.now();
@@ -58,7 +66,7 @@ export async function probeModel(model: ModelRecord, apiKey: string | null, mock
     }
     const latencyMs = Date.now() - startedAt;
     setTestResult(model.id, "ok", latencyMs);
-    return { modelId: model.id, ok: true, latencyMs, error: null, at, simulated: false };
+    return { modelId: model.id, ok: true, latencyMs, error: null, at };
   } catch (err) {
     const serialized = serializeError(err);
     const latencyMs = Date.now() - startedAt;
@@ -69,7 +77,6 @@ export async function probeModel(model: ModelRecord, apiKey: string | null, mock
       latencyMs,
       error: { code: serialized.code, message: serialized.message, detail: serialized.detail },
       at,
-      simulated: false,
     };
   }
 }

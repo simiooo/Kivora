@@ -6,6 +6,7 @@ import { awaitApproval, expireApprovals, openApproval } from "./dispatcher/appro
 import { listQueue as queueList, clearQueue } from "./repos/queue.ts";
 import { bindModel, createModel, deleteModel, listBindings, listModels } from "./repos/models.ts";
 import { getConfig, setConfig } from "./repos/config.ts";
+import { setMockModeForSelfCheck } from "./env.ts";
 import { AppError } from "../shared/errors.ts";
 import fs from "node:fs";
 import os from "node:os";
@@ -49,6 +50,9 @@ function stateOf(id: string): SessionState | null {
 
 export async function runFlow(): Promise<number> {
   console.log("[flow] start");
+  // 自检默认走演练：没有端点没有 Key 也要能把流程跑完。
+  // 这是进程内的测试开关，跟用户看到的配置无关（生产里只有 KIVORA_MOCK）。
+  setMockModeForSelfCheck(true);
 
   // 1. 一句话建任务
   const first = await handleUtterance("把下载目录里上周的 pdf 挪到文档/发票", { source: "voice" });
@@ -196,7 +200,8 @@ export async function runFlow(): Promise<number> {
   const previousHome = process.env.KIVORA_HOME;
   process.env.KIVORA_HOME = fakeHome;
   const previousNarration = getConfig().narration;
-  setConfig({ mockMode: false, narration: false });
+  setConfig({ narration: false });
+  setMockModeForSelfCheck(false);
 
   const real = await handleUtterance("把下载目录里上周的 pdf 挪到文档/发票", { source: "voice" });
   const realAsked = await waitFor("等真实审批", () => pendingApprovals().length === 1, 8000);
@@ -270,7 +275,8 @@ export async function runFlow(): Promise<number> {
 
   const previousPi = process.env.KIVORA_PI_BIN;
   process.env.KIVORA_PI_BIN = fakeCmd;
-  setConfig({ mockMode: false, taskRuntime: "pi", narration: false });
+  setConfig({ taskRuntime: "pi", narration: false });
+  setMockModeForSelfCheck(false);
 
   const piTurn = await handleUtterance("帮我看一下下载目录", { source: "voice" });
   const piId = piTurn.action.kind === "task_created" ? piTurn.action.sessionId : null;
@@ -344,7 +350,8 @@ export async function runFlow(): Promise<number> {
   delete process.env.KIVORA_PI_HOME;
   fs.rmSync(mcpHome, { recursive: true, force: true });
 
-  setConfig({ mockMode: true, taskRuntime: "builtin", narration: previousNarration });
+  setConfig({ taskRuntime: "builtin", narration: previousNarration });
+  setMockModeForSelfCheck(true);
   if (previousHome === undefined) delete process.env.KIVORA_HOME;
   else process.env.KIVORA_HOME = previousHome;
   fs.rmSync(fakeHome, { recursive: true, force: true });

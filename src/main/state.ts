@@ -16,7 +16,6 @@ export function appState(): AppState {
     schemaVersion: info.schemaVersion,
     hotkey: config.hotkey,
     hotkeyOk: Boolean(config.hotkey),
-    mock: config.mockMode,
     secretsAvailable: secretsAvailable(),
     piAvailable: piAvailable(),
     piVersion: getPiVersion(),

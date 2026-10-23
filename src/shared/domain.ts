@@ -288,8 +288,6 @@ export interface TestResult {
   latencyMs: number;
   error: { code: string; message: string; detail: string | null } | null;
   at: number;
-  /** mock 模式且没有 Key 时只做本地演练，UI 显示"模拟"而不是"已测通" */
-  simulated: boolean;
 }
 
 /** 模型输入的公共形状（主进程用 zod 再校验） */
@@ -315,7 +313,6 @@ export type TaskRuntime = "builtin" | "pi";
 
 export interface AppConfig {
   hotkey: string;
-  mockMode: boolean;
   onboardingDone: boolean;
   taskRuntime: TaskRuntime;
   /** 旁白：模型文本先出口（3.9） */
@@ -347,7 +344,6 @@ export interface AppState {
   schemaVersion: number;
   hotkey: string;
   hotkeyOk: boolean;
-  mock: boolean;
   secretsAvailable: boolean;
   piAvailable: boolean;
   piVersion: string | null;
@@ -467,7 +463,6 @@ export interface OverlayState {
   selectedCount: number | null;
   lastRun: { title: string; state: SessionState; ageMs: number } | null;
   hotkey: string;
-  mock: boolean;
 }
 
 /* --------------------------------------------------------------- 杂项 */
