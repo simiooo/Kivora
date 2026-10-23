@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, Mic, Square, X } from "lucide-react";
 import { bridge } from "../lib/bridge.ts";
 import { Recorder, listMics, type MicDevice } from "../lib/audio.ts";
@@ -112,7 +112,7 @@ export function Composer({
         return;
       }
       if (!transcript.text.trim()) {
-        toast.push({ tone: "info", title: "这句是空的", detail: "按住热键，把话说完再松手。" });
+        toast.push({ tone: "info", title: "这句是空的", detail: "再按一次热键重新说。" });
         return;
       }
       onSent();
@@ -133,11 +133,14 @@ export function Composer({
   }, []);
 
   useEffect(() => {
+    // 热键是开关：按一下开始录，再按一下结束并发送（没有"按住"这回事，
+    // 全局快捷键收不到松开事件）
     const unsubscribe = bridge.onHotkey(() => {
-      void startRecording();
+      if (recorder.current.active) void stopRecording();
+      else void startRecording();
     });
     return unsubscribe;
-  }, [startRecording]);
+  }, [startRecording, stopRecording]);
 
   useEffect(() => {
     onListeningChange?.(recording);
@@ -182,7 +185,7 @@ export function Composer({
   }, [cancelRecording]);
 
   const placeholder = recording
-    ? "在听……说完松手"
+    ? "在听……再按一次热键结束"
     : runningTitle
       ? "再说一句会排到队尾；说「先做这个」会插队"
       : "说一句，或者先打字";
@@ -240,7 +243,7 @@ export function Composer({
 
           <button
             type="button"
-            aria-label={recording ? "停止" : "按住说话"}
+            aria-label={recording ? "停止" : "说话"}
             disabled={busy && !recording}
             onPointerDown={(event) => {
               event.preventDefault();
@@ -263,7 +266,7 @@ export function Composer({
         </div>
 
         <div className="mt-2 flex items-center gap-3 text-[11px] text-faint">
-          <span>按住麦克风说话，或直接打字</span>
+          <span>按热键或点麦克风说话，再点一次结束</span>
           {mics.length > 1 ? (
             <label className="ml-auto flex items-center gap-1">
               <Mic className="size-3" />

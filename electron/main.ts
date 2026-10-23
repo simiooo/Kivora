@@ -25,8 +25,7 @@ import { markListening, normalizeAccelerator, registerIpc } from "../src/main/ip
 import { broadcast, setBroadcastHook } from "../src/main/bus.ts";
 import { answerById, expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
 import { stopAllPiRuns } from "../src/main/dispatcher/pi-runner.ts";
-import { appendMessage, countSessions, listActiveSessions, listSessions } from "../src/main/repos/sessions.ts";
-import { formatHotkey } from "../src/shared/text.ts";
+import { listActiveSessions, listSessions, pruneBootGreetings } from "../src/main/repos/sessions.ts";
 import { pendingApprovals } from "../src/main/repos/approvals.ts";
 import { seedDemoData } from "../src/main/demo.ts";
 import { MCP_PRESETS, saveServer } from "../src/main/mcp.ts";
@@ -336,12 +335,13 @@ app.whenReady().then(async () => {
     console.error("[kivora] model dedupe failed", err);
   }
   pruneOldData(getConfig().retentionDays);
-
-  if (countSessions() === 0 && !isSmoke) {
-    appendMessage({
-      role: "assistant",
-      content: `我是 Kivora。按 ${formatHotkey(getConfig().hotkey)} 说一句话，我会开独立会话去把事做完。现在跑的是演练模式。`,
-    });
+  // 不再往时间线里塞欢迎语：空状态由界面渲染（见 TimelinePage 的 EXAMPLES），
+  // 一旦有内容它自然消失，也不会每启动一次就多一条。老版本留下的重复欢迎语顺手清掉。
+  try {
+    const pruned = pruneBootGreetings();
+    if (pruned > 0) console.log(`[kivora] removed ${pruned} boot greetings`);
+  } catch (err) {
+    console.error("[kivora] greeting cleanup failed", err);
   }
 
   // 无窗口跑一遍调度器（CI / 本地验收用），不创建任何窗口

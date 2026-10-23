@@ -196,8 +196,10 @@ export function TimelinePage({
           {(messages.data ?? []).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <Sparkles className="mb-3 size-5 text-acorn" />
-              <p className="text-[15px] text-foreground">按住热键说一句话，我会开独立会话去做。</p>
-              <p className="mt-1 text-[12px] text-faint">语音层只负责调度和回话，活儿在别的会话里跑。</p>
+              <p className="text-[15px] text-foreground">
+                按 {formatHotkey(bootstrap.config.hotkey)} 说一句话，我会开独立会话去做。
+              </p>
+              <p className="mt-1 text-[12px] text-faint">说完再按一次热键结束；语音层只负责调度和回话。</p>
               <div className="mt-5 flex flex-wrap justify-center gap-2">
                 {EXAMPLES.map((example) => (
                   <button

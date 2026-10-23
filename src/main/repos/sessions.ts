@@ -418,6 +418,23 @@ export function appendMessage(input: AppendMessageInput): Message {
   };
 }
 
+/**
+ * 旧版本每次启动都会往时间线写一条欢迎语（`session_id` 为空的那条），
+ * 启动几次就重复几条。现在不写了，这里把历史遗留的删掉。
+ * 只匹配那句话的模板，不碰真正的回复。
+ */
+export function pruneBootGreetings(): number {
+  const res = db()
+    .prepare(
+      `DELETE FROM messages
+       WHERE session_id IS NULL
+         AND role = 'assistant'
+         AND content LIKE '我是 Kivora。按 %说一句话，我会开独立会话去把事做完。%'`,
+    )
+    .run();
+  return Number(res.changes);
+}
+
 export function listTimeline(limit = 80): Message[] {
   const rows = db()
     .prepare("SELECT * FROM messages ORDER BY ts DESC, id DESC LIMIT ?")
