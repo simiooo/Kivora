@@ -323,6 +323,8 @@ function VoiceSection({
   const models = useLiveData(() => bridge.listModels(), ["models"]);
   const bindings = useLiveData(() => bridge.listBindings(), ["models"]);
   const [playing, setPlaying] = useState(false);
+  // 名字是本地草稿，失焦/回车才落库，别每敲一个字就广播一次配置
+  const [wakeDraft, setWakeDraft] = useState(bootstrap.config.wakeWord);
 
   const asrModel = useMemo(() => {
     const binding = (bindings.data ?? []).find((item) => item.module === "asr");
@@ -406,12 +408,18 @@ function VoiceSection({
           </div>
           <Input
             className="h-9 w-40 text-center"
-            value={bootstrap.config.wakeWord}
-            onChange={(event) => {
-              const word = event.target.value.slice(0, 12);
-              void onConfig({ wakeWord: word || "小栗" }).catch((err) =>
+            value={wakeDraft}
+            onChange={(event) => setWakeDraft(event.target.value.slice(0, 12))}
+            onBlur={() => {
+              const word = wakeDraft.trim() || "小栗";
+              setWakeDraft(word);
+              if (word === bootstrap.config.wakeWord) return;
+              void onConfig({ wakeWord: word }).catch((err) =>
                 toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
               );
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
             }}
           />
         </div>

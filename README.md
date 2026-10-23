@@ -119,6 +119,17 @@ Windows 凭据管理器（DPAPI）        # API Key，只存密文
 
 默认模型栈：调度/任务 `deepseek-flash`（官方 ID 就是这个词，`DeepSeek-V4.1-Flash-1017` 才是版本号；地址 `https://api.deepseek.com/v1`），识别 `qwen-audio-3.1-asr-flash-message`、合成 `qwen-audio-3.1-tts-flash`（音色默认 `longanhuan_v3.1`，必须属于这个模型）。语音这两条走 **WebSocket**（DashScope 协议：`run-task` → 二进制/`continue-task` → `finish-task`，事件 `task-started/result-generated/task-finished/task-failed`），不是 OpenAI 的 `/audio/*` HTTP 接口；录音直接采 16k 单声道 WAV 再发过去。长文件转写用 `...-filetrans`、下一代合成用 `...-tts-next`、流式用 `...-realtime-plus`。
 
+## 语音怎么用（每一处都能在设置里改）
+
+| 能力 | 行为 | 开关 |
+|---|---|---|
+| 热键说话 | 按一下开始录，再按一下结束并发送；没有"按住"（全局快捷键收不到松开） | 通用 → 唤醒热键 |
+| 说完自动结束 | 静音 0.8 秒就收尾，不用再按 | 语音 → 说完自动结束 / 静音时长 |
+| 边说边出字 | 绑流式识别模型时，说的同时在悬浮窗和输入框里出字 | 模型 → 预设「Qwen 流式识别」 |
+| 免按键 | 麦克风常开，检测到你开口就自动开始；自己播报时不听，30 分钟没人理自动关 | 语音 → 免按键 |
+| 唤醒词 | 免按键 + 流式识别时可要求先叫「小栗」；1.6 秒内没叫就整段丢掉（这段音频会经过识别服务） | 语音 → 先说唤醒词 |
+| 打断 | 播报/思考时按热键、按 Esc，或点悬浮窗的「打断」，立刻停 | 无需开关 |
+| 只听不记 | 原话不写进时间线，只留动作与结果 | 语音 → 只听不记 |
 ## 已知边界（说清楚，不假装）
 
 1. **CUA / 浏览器需要你自己装服务器**：Kivora 只写 `~/.pi/agent/mcp.json`，`cua-driver` 和 `@playwright/mcp` 得装在机器上；没装的话 pi 会报连接失败。
