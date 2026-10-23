@@ -98,7 +98,7 @@ export function OnboardingPage({
             {step === 2 ? <DoneStep model={model} bound={bound} bootstrap={bootstrap} onConfig={onConfig} /> : null}
           </div>
 
-          <div className="mt-10 flex items-center gap-3">
+          <div className="sticky bottom-0 z-10 -mx-10 mt-8 flex items-center gap-3 border-t border-border/60 bg-background/95 px-10 py-4 backdrop-blur">
             <button
               type="button"
               onClick={() => {
@@ -151,6 +151,82 @@ function ConnectStep({
   const [apiKey, setApiKey] = useState("");
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [voiceOn, setVoiceOn] = useState(true);
+  const [voiceBase, setVoiceBase] = useState("https://dashscope.aliyuncs.com/compatible-mode/v1");
+  const [voiceKey, setVoiceKey] = useState("");
+  const [asrId, setAsrId] = useState("qwen-audio-3.1-asr-flash-message");
+  const [ttsId, setTtsId] = useState("qwen-audio-3.1-tts-flash");
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceState, setVoiceState] = useState<{ asr?: "ok" | "fail"; tts?: "ok" | "fail"; text?: string } | null>(
+    null,
+  );
+
+  const connectVoice = async (): Promise<void> => {
+    if (!voiceKey.trim()) {
+      toast.push({ tone: "info", title: "还没填 Key", detail: "没 Key 就先跳过语音，之后在设置 → 模型里补。" });
+      return;
+    }
+    setVoiceBusy(true);
+    setVoiceState(null);
+    try {
+      const [models, bindings] = await Promise.all([bridge.listModels(), bridge.listBindings()]);
+      const base = voiceBase.trim().replace(/\/+$/, "");
+      const upsert = async (
+        capability: "asr" | "tts",
+        fallbackName: string,
+        modelName: string,
+        params: typeof DEFAULT_PARAMS,
+      ) => {
+        const boundId = bindings.find((item) => item.module === capability)?.modelId;
+        const existing = models.find((item) => item.id === boundId);
+        const saved = await bridge.saveModel({
+          id: existing?.id,
+          name: existing?.name ?? fallbackName,
+          provider: "openai",
+          capability,
+          baseUrl: base,
+          modelId: modelName.trim(),
+          params,
+          headers: [],
+          apiKey: voiceKey.trim(),
+        });
+        await bridge.bindModel(capability, saved.id);
+        return saved;
+      };
+
+      const asr = await upsert("asr", "Qwen ASR", asrId, { ...DEFAULT_PARAMS, temperature: null, maxTokens: null });
+      const tts = await upsert("tts", "Qwen TTS", ttsId, {
+        ...DEFAULT_PARAMS,
+        temperature: null,
+        maxTokens: null,
+        voice: "Cherry",
+        speed: 1,
+      });
+      const [asrResult, ttsResult] = await Promise.all([bridge.testModel(asr.id), bridge.testModel(tts.id)]);
+      const failures = [
+        asrResult.ok ? null : `识别：${asrResult.error?.message ?? "失败"}`,
+        ttsResult.ok ? null : `合成：${ttsResult.error?.message ?? "失败"}`,
+      ].filter(Boolean);
+      setVoiceState({
+        asr: asrResult.ok ? "ok" : "fail",
+        tts: ttsResult.ok ? "ok" : "fail",
+        text:
+          failures.length > 0
+            ? failures.join(" · ")
+            : `识别 ${asrResult.latencyMs}ms · 合成 ${ttsResult.latencyMs}ms`,
+      });
+      toast.push({
+        tone: asrResult.ok && ttsResult.ok ? "success" : "error",
+        title: asrResult.ok && ttsResult.ok ? "语音配好了" : "语音有一项没通过",
+      });
+    } catch (err) {
+      const ui = toUiError(err);
+      setVoiceState({ text: ui.message });
+      toast.push({ tone: "error", title: "语音没保存上", detail: ui.message });
+    } finally {
+      setVoiceBusy(false);
+    }
+  };
 
   const connect = async (): Promise<void> => {
     setTesting(true);
@@ -226,8 +302,59 @@ function ConnectStep({
         <p className={cn("mt-3 text-[12px]", result.ok ? "text-positive" : "text-destructive")}>{result.text}</p>
       ) : null}
 
+      <div className="mt-8 rounded-[14px] border border-border bg-card px-4 py-3">
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] text-foreground">语音（识别 + 合成）</div>
+            <p className="mt-0.5 text-[11px] leading-5 text-faint">
+              不配也能用——但只能打字、听提示音。配了才会真的听你说话、真的出声。
+            </p>
+          </div>
+          <Switch checked={voiceOn} onChange={setVoiceOn} label="配置语音" />
+        </div>
+
+        {voiceOn ? (
+          <div className="mt-4">
+            <Field label="语音 Base URL" hint="阿里百炼的 OpenAI 兼容端点；识别和合成共用。">
+              <Input value={voiceBase} onChange={(event) => setVoiceBase(event.target.value)} spellCheck={false} />
+            </Field>
+            <Field label="百炼 API Key" hint="识别和合成同一个 Key，存进 Windows 凭据管理器。">
+              <Input
+                type="password"
+                value={voiceKey}
+                onChange={(event) => setVoiceKey(event.target.value)}
+                placeholder="sk-…"
+                autoComplete="off"
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="识别模型">
+                <Input value={asrId} onChange={(event) => setAsrId(event.target.value)} spellCheck={false} />
+              </Field>
+              <Field label="合成模型">
+                <Input value={ttsId} onChange={(event) => setTtsId(event.target.value)} spellCheck={false} />
+              </Field>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button variant="secondary" onClick={() => void connectVoice()} disabled={voiceBusy}>
+                {voiceBusy ? <Spinner className="size-3.5" /> : <PlugZap className="size-3.5" />}
+                {voiceBusy ? "测试中…" : "保存并测试语音"}
+              </Button>
+              {voiceState?.asr === "ok" ? <Chip tone="positive">识别 ✓</Chip> : null}
+              {voiceState?.tts === "ok" ? <Chip tone="positive">合成 ✓</Chip> : null}
+              {voiceState?.asr === "fail" ? <Chip tone="danger">识别未通过</Chip> : null}
+              {voiceState?.tts === "fail" ? <Chip tone="danger">合成未通过</Chip> : null}
+            </div>
+            {voiceState?.text ? (
+              <p className="mt-2 text-[11px] leading-5 text-faint">{voiceState.text}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
       <p className="mt-8 text-[11px] leading-5 text-faint">
-        先跳过也行：mock 模式会把整条流程走通，只是不真的发请求。
+        先跳过也行：演练模式会把整条流程走通，只是不真的发请求。
       </p>
     </div>
   );
