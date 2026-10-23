@@ -108,6 +108,7 @@ export const IPC = {
   mcpDelete: "kivora:mcp:delete",
   mcpCapability: "kivora:mcp:capability",
   mcpPresets: "kivora:mcp:presets",
+  mcpTest: "kivora:mcp:test",
   grantsList: "kivora:grants:list",
   grantsRevoke: "kivora:grants:revoke",
   openExternal: "kivora:shell:open",
@@ -171,6 +172,7 @@ export interface KivoraBridge {
   deleteMcpServer(name: string): Promise<McpServerView[]>;
   mcpCapability(): Promise<McpCapability>;
   mcpPresets(): Promise<McpPreset[]>;
+  testMcpServer(name: string): Promise<McpProbeResult>;
 
   listGrants(): Promise<Grant[]>;
   revokeGrants(sessionId?: string): Promise<void>;
@@ -187,6 +189,15 @@ export interface KivoraBridge {
   overlayOpenMain(): Promise<void>;
   overlayHide(): Promise<void>;
   openSettings(): Promise<void>;
+}
+
+export interface McpProbeResult {
+  ok: boolean;
+  serverName: string;
+  serverVersion: string;
+  tools: Array<{ name: string; description: string }>;
+  latencyMs: number;
+  error: { code: string; message: string; detail: string | null } | null;
 }
 
 export interface ModelPreset {

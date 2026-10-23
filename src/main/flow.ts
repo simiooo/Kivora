@@ -12,6 +12,8 @@ import os from "node:os";
 import path from "node:path";
 import { DEFAULT_PARAMS } from "../shared/domain.ts";
 import { compactPiSession } from "./dispatcher/pi-runner.ts";
+import { listServers, MCP_PRESETS, mcpCapability, removeServer, saveServer } from "./mcp.ts";
+import { probeMcpServer } from "./mcp-client.ts";
 
 /**
  * `--flow`：不开窗口，直接把调度器跑一遍。
@@ -293,6 +295,54 @@ export async function runFlow(): Promise<number> {
   if (previousPi === undefined) delete process.env.KIVORA_PI_BIN;
   else process.env.KIVORA_PI_BIN = previousPi;
   fs.rmSync(piDir, { recursive: true, force: true });
+
+  // 13. MCP：只写 kivora- 前缀、保留别人的条目、真起一个 stdio 服务器握手
+  const mcpHome = fs.mkdtempSync(path.join(os.tmpdir(), "kivora-mcp-"));
+  process.env.KIVORA_PI_HOME = mcpHome;
+  fs.mkdirSync(path.join(mcpHome, "agent"), { recursive: true });
+  fs.writeFileSync(
+    path.join(mcpHome, "agent", "mcp.json"),
+    JSON.stringify({ mcpServers: { mine: { command: "uvx", args: ["my-mcp"] } } }),
+  );
+
+  const preset = MCP_PRESETS.find((item) => item.key === "playwright")!;
+  saveServer(preset.server);
+  const servers = listServers();
+  check("MCP 预设写进 kivora- 前缀", servers.some((server) => server.name === "kivora-playwright"));
+  check("MCP 不覆盖用户自己的条目", servers.some((server) => server.name === "mine" && !server.managed));
+  const capability = mcpCapability();
+  check(
+    "MCP 能力有结论（支持或不支持）",
+    typeof capability.available === "boolean" && capability.reason.length > 0,
+    capability.reason,
+  );
+
+  const fakeMcp = path.join(mcpHome, "fake-mcp.js");
+  fs.writeFileSync(
+    fakeMcp,
+    [
+      'const readline = require("node:readline");',
+      "const rl = readline.createInterface({ input: process.stdin });",
+      'const send = (o) => process.stdout.write(JSON.stringify(o) + "\\n");',
+      'rl.on("line", (line) => {',
+      "  const msg = JSON.parse(line);",
+      '  if (msg.method === "initialize") return send({ jsonrpc: "2.0", id: msg.id, result: { protocolVersion: "2024-11-05", capabilities: {}, serverInfo: { name: "fake-mcp", version: "1.0.0" } } });',
+      '  if (msg.method === "tools/list") return send({ jsonrpc: "2.0", id: msg.id, result: { tools: [{ name: "click" }, { name: "read" }] } });',
+      "});",
+    ].join("\n"),
+    "utf8",
+  );
+  const probed = await probeMcpServer({ name: "fake", command: "node", args: [fakeMcp], env: {}, enabled: true });
+  check(
+    "MCP 服务器能握手并列出工具",
+    probed.ok && probed.tools.length === 2,
+    probed.ok ? `${probed.tools.length} 个工具` : (probed.error?.message ?? ""),
+  );
+
+  removeServer("kivora-playwright");
+  check("MCP 只删自己的", listServers().length === 1);
+  delete process.env.KIVORA_PI_HOME;
+  fs.rmSync(mcpHome, { recursive: true, force: true });
 
   setConfig({ mockMode: true, taskRuntime: "builtin", narration: previousNarration });
   if (previousHome === undefined) delete process.env.KIVORA_HOME;

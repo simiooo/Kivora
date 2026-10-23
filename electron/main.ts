@@ -22,6 +22,7 @@ import { setBroadcastHook } from "../src/main/bus.ts";
 import { expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
 import { appendMessage, countSessions, listSessions } from "../src/main/repos/sessions.ts";
 import { seedDemoData } from "../src/main/demo.ts";
+import { MCP_PRESETS, saveServer } from "../src/main/mcp.ts";
 
 const isShots = process.argv.includes("--shots") || process.env.KIVORA_SHOTS === "1";
 const isFlow = process.argv.includes("--flow") || process.env.KIVORA_FLOW === "1";
@@ -120,6 +121,9 @@ async function loadRoute(win: BrowserWindow, route: string): Promise<void> {
 
 async function runShots(): Promise<void> {
   setConfig({ onboardingDone: true, mockMode: true });
+  // 截图用的 pi 配置写到临时目录，别碰用户真实的 ~/.pi
+  process.env.KIVORA_PI_HOME = path.join(app.getPath("userData"), "pi-home");
+  saveServer(MCP_PRESETS.find((preset) => preset.key === "playwright")!.server);
   seedDemoData();
   const win = createMainWindow();
   await wait(900);

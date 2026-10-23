@@ -128,7 +128,7 @@ Windows 凭据管理器（DPAPI）        # API Key，只存密文
 
 | 能力 | Pi 那边是什么 | Kivora 做什么 |
 |---|---|---|
-| 桌面控制、浏览器 | **MCP 扩展**（随包的 pi 1.4.0 自带），读 `~/.pi/agent/mcp.json` | 设置 → 扩展：一键加 `cua-driver` / `@playwright/mcp`；只写 `kivora-` 前缀的条目，用户自己的服务器原样保留 |
+| 桌面控制、浏览器 | **MCP 扩展**（随包的 pi 1.4.0 自带），读 `~/.pi/agent/mcp.json` | 设置 → 扩展：一键加 `cua-driver` / `@playwright/mcp`；只写 `kivora-` 前缀的条目；每行有「测试」按钮，真握手并列出工具数 |
 | 权限控制 | **扩展的 `tool_call` 钩子** + `ctx.ui.confirm()` | 内置 `resources/kivora-permission.ts`：危险 bash、家目录外写入、动作类 MCP 工具先问；在 RPC 模式里变成审批卡，回答写回 `extension_ui_response` |
 | 会话压缩 | **RPC `compact`** / 自动压缩 | 历史页「压缩」按钮（仅 Pi 会话）；`compaction_start/end` 事件进事件流 |
 | 消息队列 | **RPC `steer` / `follow_up`**，事件 `queue_update` | 说「插一句」→ `steer` 进正在跑的 Pi 会话；任务级排队仍在 Kivora 自己的队列里 |

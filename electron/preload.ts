@@ -93,6 +93,7 @@ const api: KivoraBridge = {
   deleteMcpServer: (name) => invoke(IPC.mcpDelete, name),
   mcpCapability: () => invoke(IPC.mcpCapability),
   mcpPresets: () => invoke(IPC.mcpPresets),
+  testMcpServer: (name) => invoke(IPC.mcpTest, name),
 
   listGrants: () => invoke(IPC.grantsList),
   revokeGrants: (sessionId) => invoke(IPC.grantsRevoke, sessionId),

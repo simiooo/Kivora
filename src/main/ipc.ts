@@ -38,6 +38,7 @@ import {
 } from "./repos/models.ts";
 import { getSecret, modelSecretName } from "./secrets.ts";
 import { listServers, mcpCapability, MCP_PRESETS, removeServer, saveServer } from "./mcp.ts";
+import { assertProbeable, probeMcpServer } from "./mcp-client.ts";
 import { probeModel } from "./providers/probe.ts";
 import { synthesizeSpeech, transcribeAudio } from "./voice.ts";
 import { broadcast } from "./bus.ts";
@@ -353,6 +354,12 @@ export function registerIpc(deps: IpcDeps): void {
     const next = removeServer(parse(z.string().min(1).max(60), raw));
     broadcast("config");
     return next;
+  });
+
+  handle(IPC.mcpTest, async (_event, raw) => {
+    const name = parse(z.string().min(1).max(60), raw);
+    const server = listServers().find((item) => item.name === name);
+    return probeMcpServer(assertProbeable(server));
   });
 
   handle(IPC.mcpCapability, () => mcpCapability());

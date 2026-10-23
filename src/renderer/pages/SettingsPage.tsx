@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Copy, ExternalLink, Play, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, Copy, ExternalLink, FlaskConical, Play, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import type { Bootstrap } from "@shared/ipc.ts";
 import type { AppConfig, Grant, McpCapability, McpPreset, McpServerView } from "@shared/domain.ts";
+import type { McpProbeResult } from "@shared/ipc.ts";
 import { displayPath, formatHotkey, formatRelative, formatTime } from "@shared/text.ts";
 import { bridge, toUiError } from "../lib/bridge.ts";
 import { useLiveData } from "../lib/hooks.ts";
 import { cn } from "../lib/utils.ts";
-import { Button, Chip, Dot, Empty, Field, Input, SectionLabel, ToggleRow, useToast } from "../components/ui.tsx";
+import { Button, Chip, Dot, Empty, Field, Input, SectionLabel, Spinner, ToggleRow, useToast } from "../components/ui.tsx";
 import { ModelsPanel } from "../components/models-panel.tsx";
 
 const NAV: Array<{ label: string; route: string; key: string }> = [
@@ -98,6 +99,15 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
 
 function Card({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="mb-4 rounded-[16px] bg-card px-5 py-2">{children}</div>;
+}
+
+function describeProbe(probe: McpProbeResult): string {
+  if (probe.ok) {
+    const names = probe.tools.slice(0, 4).map((tool) => tool.name).join(", ");
+    return `${probe.tools.length} 个工具 · ${probe.latencyMs}ms${names ? ` · ${names}` : ""}`;
+  }
+  const detail = probe.error?.detail ? ` — ${probe.error.detail.split("\n")[0]}` : "";
+  return `${probe.error?.message ?? "连接失败"}${detail}`;
 }
 
 function Segmented({
@@ -420,6 +430,25 @@ function ExtensionsSection(): React.JSX.Element {
   const [name, setName] = useState("");
   const [command, setCommand] = useState("npx");
   const [args, setArgs] = useState("");
+  const [testing, setTesting] = useState<string | null>(null);
+  const [results, setResults] = useState<Record<string, McpProbeResult>>({});
+
+  const testServer = async (serverName: string): Promise<void> => {
+    setTesting(serverName);
+    try {
+      const result = await bridge.testMcpServer(serverName);
+      setResults((prev) => ({ ...prev, [serverName]: result }));
+      toast.push({
+        tone: result.ok ? "success" : "error",
+        title: result.ok ? `${serverName} 连上了` : `${serverName} 连不上`,
+        detail: result.ok ? `${result.tools.length} 个工具 · ${result.latencyMs}ms` : (result.error?.message ?? ""),
+      });
+    } catch (err) {
+      toast.push({ tone: "error", title: "测试失败", detail: toUiError(err).message });
+    } finally {
+      setTesting(null);
+    }
+  };
 
   useEffect(() => {
     void Promise.all([bridge.listMcpServers(), bridge.mcpCapability(), bridge.mcpPresets()])
@@ -507,19 +536,40 @@ function ExtensionsSection(): React.JSX.Element {
               <span className="font-mono text-[12px] text-foreground">{server.name}</span>
               <Chip tone={server.managed ? "neutral" : "muted"}>{server.managed ? "Kivora 写的" : "别处配的"}</Chip>
               <span className="text-[11px] text-faint">{server.enabled ? "启用" : "已停用"}</span>
-              {server.managed ? (
-                <Button variant="ghost" size="sm" className="ml-auto" onClick={() => remove(server.name)}>
-                  删除
+              <span className="ml-auto flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={testing === server.name}
+                  onClick={() => void testServer(server.name)}
+                >
+                  {testing === server.name ? <Spinner className="size-3" /> : <FlaskConical className="size-3" />}
+                  {testing === server.name ? "连接中…" : "测试"}
                 </Button>
-              ) : (
-                <span className="ml-auto text-[11px] text-faint">不在 Kivora 里改</span>
-              )}
+                {server.managed ? (
+                  <Button variant="ghost" size="sm" onClick={() => remove(server.name)}>
+                    删除
+                  </Button>
+                ) : (
+                  <span className="text-[11px] text-faint">不在 Kivora 里改</span>
+                )}
+              </span>
             </div>
             <p className="mt-1 truncate font-mono text-[11px] text-faint">
               {server.command} {server.args.join(" ")}
             </p>
             {server.description ? (
               <p className="mt-0.5 truncate text-[11px] text-faint">{server.description}</p>
+            ) : null}
+            {results[server.name] ? (
+              <p
+                className={cn(
+                  "mt-1 text-[11px] leading-5",
+                  results[server.name].ok ? "text-positive" : "text-destructive",
+                )}
+              >
+                {describeProbe(results[server.name])}
+              </p>
             ) : null}
           </div>
         ))}
