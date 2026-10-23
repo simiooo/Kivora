@@ -113,6 +113,7 @@ export function Composer({
     // 唤醒词门只能建在流式识别上（先听一小段再决定要不要继续）
     if (wakeRequired && stream.streaming) {
       wakeRef.current = { active: true, armed: false, timer: 0 };
+      void bridge.reportWake(true, false);
       wakeRef.current.timer = window.setTimeout(() => {
         if (!wakeRef.current.active || wakeRef.current.armed) return;
         wakeRef.current.active = false;
@@ -192,6 +193,7 @@ export function Composer({
     setRecording(false);
     setLevel(0);
     setPartial("");
+    void bridge.reportWake(false, true);
     bridge.reportLevel(0);
     const streamId = streamRef.current;
     streamRef.current = null;
@@ -236,6 +238,8 @@ export function Composer({
     if (streamId) void bridge.asrStreamCancel(streamId).catch(() => undefined);
     setRecording(false);
     setLevel(0);
+    setPartial("");
+    void bridge.reportWake(false, true);
     bridge.reportLevel(0);
   }, []);
 
@@ -247,6 +251,7 @@ export function Composer({
       if (!wakeRequired || !wakeRef.current.active || wakeRef.current.armed) return;
       if (!containsWakeWord(event.partial, wakeWord)) return;
       wakeRef.current.armed = true;
+      void bridge.reportWake(true, true);
       window.clearTimeout(wakeRef.current.timer);
     });
   }, [wakeRequired, wakeWord]);

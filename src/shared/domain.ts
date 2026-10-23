@@ -485,6 +485,12 @@ export interface OverlayState {
   speaking: boolean;
   /** 免按键：一直在等用户开口 */
   handsFree: boolean;
+  /** 这一句要不要先叫名字（唤醒词门） */
+  wakeRequired: boolean;
+  /** 名字叫过了没有 */
+  wakeArmed: boolean;
+  /** 叫的名字 */
+  wakeWord: string;
 }
 
 /* --------------------------------------------------------------- 杂项 */

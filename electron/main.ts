@@ -1,4 +1,4 @@
-﻿import { app, BrowserWindow, globalShortcut } from "electron";
+import { app, BrowserWindow, globalShortcut } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { IPC } from "../src/shared/ipc.ts";
@@ -269,6 +269,8 @@ async function runShots(): Promise<void> {
   // 悬浮窗是常驻 HUD：截图时喂一个真实电平，波纹才不是摆拍
   markListening(true);
   showOverlay();
+  // 走真实 IPC：让悬浮窗显示"叫一句「小栗」再说是要做什么"
+  await win.webContents.executeJavaScript(`void window.kivora.reportWake(true, false)`);
   // 波纹是照着主窗上报的电平画的：连喂几帧，截出来的才是"在说话"的样子
   for (const level of [0.32, 0.61, 0.84, 0.58, 0.78]) {
     broadcast("voice", { level });
@@ -280,6 +282,7 @@ async function runShots(): Promise<void> {
   console.log(`[kivora] motion overlay early=${JSON.stringify(overlayEarly)} late=${JSON.stringify(overlayLate)}`);
   await capture(getOverlayWindow(), "shot-06-overlay.png");
   markListening(false);
+  await win.webContents.executeJavaScript(`void window.kivora.reportWake(false, true)`);
   broadcast("voice", { level: 0 });
   // 常驻验证：空闲 5.5 秒（超过以前的自动收起阈值）后窗口仍在
   await wait(5500);

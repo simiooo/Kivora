@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AppConfig,
   AppState,
   Approval,
@@ -137,6 +137,7 @@ export const IPC = {
   voiceState: "kivora:voice:state",
   voiceLevel: "kivora:voice:level",
   voiceStop: "kivora:voice:stop",
+  voiceWake: "kivora:voice:wake",
   speechDone: "kivora:speech:done",
   interrupt: "kivora:turn:interrupt",
   windowOpenSettings: "kivora:window:open-settings",
@@ -220,6 +221,8 @@ export interface KivoraBridge {
   reportVoice(active: boolean): void;
   /** 主窗上报实时电平（0–1），悬浮窗照着画波纹 */
   reportLevel(level: number): void;
+  /** 唤醒词门的状态：悬浮窗据此显示"等你叫名字" */
+  reportWake(required: boolean, armed: boolean): void;
   /** 主进程让主窗停下来（来自悬浮窗或后续的快捷键） */
   onStopVoice(cb: () => void): () => void;
   /** 播报放完了，主进程据此把"在说"关掉 */

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+﻿import { contextBridge, ipcRenderer } from "electron";
 import { IPC, type ChangeEvent, type KivoraBridge } from "../src/shared/ipc.ts";
 
 /**
@@ -120,6 +120,7 @@ const api: KivoraBridge = {
   // 电平/录音状态是高频、可丢的：用 send 而不是 invoke，别为每一帧等一个 Promise
   reportVoice: (active) => ipcRenderer.send(IPC.voiceState, active),
   reportLevel: (level) => ipcRenderer.send(IPC.voiceLevel, level),
+  reportWake: (required, armed) => ipcRenderer.send(IPC.voiceWake, { required, armed }),
   speechDone: () => ipcRenderer.send(IPC.speechDone),
   interrupt: () => invoke(IPC.interrupt),
   onStopVoice: (cb) => {

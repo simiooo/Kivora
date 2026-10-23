@@ -165,6 +165,8 @@ function handle(channel: string, fn: Handler): void {
 }
 
 let listening = false;
+/** 唤醒词门状态：required 时悬浮窗显示"等你叫名字"，armed 表示已经叫过了 */
+let wakeState: { required: boolean; armed: boolean } = { required: false, armed: true };
 
 export function markListening(value: boolean): void {
   listening = value;
@@ -504,6 +506,9 @@ export function registerIpc(deps: IpcDeps): void {
       thinking: isThinking(),
       speaking: isSpeaking(),
       handsFree: config.handsFree,
+      wakeRequired: wakeState.required,
+      wakeArmed: wakeState.armed,
+      wakeWord: config.wakeWord,
     };
   });
 
@@ -545,6 +550,11 @@ export function registerIpc(deps: IpcDeps): void {
   // 主窗上报的录音状态与电平：前者决定"在听"，后者喂悬浮窗的波纹
   ipcMain.on(IPC.voiceState, (_event, value: unknown) => {
     markListening(value === true);
+  });
+  ipcMain.on(IPC.voiceWake, (_event, value: unknown) => {
+    const payload = (value ?? {}) as { required?: boolean; armed?: boolean };
+    wakeState = { required: payload.required === true, armed: payload.armed === true };
+    broadcast("overlay");
   });
   ipcMain.on(IPC.voiceLevel, (_event, value: unknown) => {
     const level = typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;

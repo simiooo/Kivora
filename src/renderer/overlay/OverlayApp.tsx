@@ -120,12 +120,20 @@ export function OverlayApp(): React.JSX.Element | null {
         {listening ? (
           <div className="px-5 pb-4">
             <Bars level={level} />
-            {partial ? (
-              <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-foreground/80">{partial}</p>
-            ) : null}
-            <p className="mt-2 text-[11px] text-faint">
-              {state.autoStop ? "说完会自动结束；不想发就点「停」" : "说完点「停」，或按 Esc 取消这一句"}
-            </p>
+            {state.wakeRequired && !state.wakeArmed ? (
+              <p className="mt-2 text-[12px] leading-5 text-acorn">
+                叫一句「{state.wakeWord}」再说是要做什么
+              </p>
+            ) : (
+              <>
+                {partial ? (
+                  <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-foreground/80">{partial}</p>
+                ) : null}
+                <p className="mt-2 text-[11px] text-faint">
+                  {state.autoStop ? "说完会自动结束；不想发就点「停」" : "说完点「停」，或按 Esc 取消这一句"}
+                </p>
+              </>
+            )}
           </div>
         ) : null}
 
