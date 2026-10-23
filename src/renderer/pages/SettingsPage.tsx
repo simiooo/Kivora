@@ -384,6 +384,16 @@ function VoiceSection({
           }
         />
         <ToggleRow
+          title="边合成边播（更快出声）"
+          description="长句不再等整段合成：音频一帧一帧回来就开始说，第一帧到达就出声。只对 DashScope 的语音合成生效；起不来会自动退回「整段合成」，不影响说话。"
+          checked={bootstrap.config.streamSpeech}
+          onChange={(value) =>
+            void onConfig({ streamSpeech: value }).catch((err) =>
+              toast.push({ tone: "error", title: "没保存上", detail: toUiError(err).message }),
+            )
+          }
+        />
+        <ToggleRow
           title="免按键，开口就说"
           description="麦克风常开，检测到你在说话就自动开始识别，全程不用按热键。它在播报时也听着——你直接开口就能打断它（阈值会提高，避免它被自己的声音打断）。代价是 Windows 会一直显示麦克风占用。"
           checked={bootstrap.config.handsFree}

@@ -112,6 +112,7 @@ const configPatchSchema = z.object({
   taskRuntime: z.enum(["builtin", "pi"]).optional(),
   narration: z.boolean().optional(),
   ackEnabled: z.boolean().optional(),
+  streamSpeech: z.boolean().optional(),
   autoStop: z.boolean().optional(),
   autoStopSilenceMs: z.number().int().min(300).max(3000).optional(),
   handsFree: z.boolean().optional(),

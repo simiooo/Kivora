@@ -319,6 +319,8 @@ export interface AppConfig {
   narration: boolean;
   /** 缓存 ack 片段 */
   ackEnabled: boolean;
+  /** 边合成边播：第一帧音频回来就开始说（实验性，仅 DashScope 合成） */
+  streamSpeech: boolean;
   /** 说完自动结束录音（能量包络端点检测，不依赖模型） */
   autoStop: boolean;
   /** 静音多久算说完 */

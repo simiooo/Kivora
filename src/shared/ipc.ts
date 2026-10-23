@@ -64,6 +64,7 @@ export type ChangeKind =
   | "voice"
   | "speech"
   | "speech-stop"
+  | "speech-pcm"
   | "hotkey";
 
 export interface ChangeEvent {
@@ -75,6 +76,11 @@ export interface ChangeEvent {
   level?: number;
   /** voice 事件的流式识别中间结果（边说边出字） */
   partial?: string;
+  /** speech-pcm：一段 16bit PCM（base64），配 utteranceId 排队播放 */
+  pcm?: string;
+  utteranceId?: string;
+  seq?: number;
+  sampleRate?: number;
 }
 
 export const IPC = {

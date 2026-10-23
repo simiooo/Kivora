@@ -45,7 +45,7 @@
 | ~~本地声学唤醒词~~ | voice 1.2 | **决定不做**（2026-10-24）：用云端 1.6 秒校验代替，设置里写明隐私代价 | — |
 | **Cost Router** | voice 0 / 1.2 | `main/cost-router.ts`：按 a0/a1/a2/l3 分档计数（反射 / 短补全 / 批次语音 / 实时），`chooseAsrChannel()` 把流式识别只留给持续对话，`canUseRealtime()` 对实时通道做 3% 硬预算；「关于」页显示本机用量分档 | cost-router.test（5 条：分档、通道选择、3% 拦截、样本不足不拦） |
 | **6 层上下文栈** | voice 2.3 | 实到 5 层（偏好 / 最近说过 / 上次任务 / 当前 / 队列），没有"长期记忆" | 产品还没有记忆库，宁缺毋滥；前缀缓存靠"稳定 system + 易变信息在尾部"已经吃到 |
-| **L2/L3 实时输出** | voice 0 | 批式 TTS 改成"拆句 + 顺序播"：长结论第一句合成完就出声，后面几段排在队列里；实时通道硬预算 3% 已建好阀门但暂时没有消费者（全双工语音还没做） | speech-chunks.test（5 条）、speech-player.test（4 条：同句排队/新句抢占/无 id 兼容/clear） |
+| **L2/L3 实时输出** | voice 0 | 两条路：① 批式 TTS 拆句 + 顺序播；② 可选「边合成边播」——`providers/dashscope-tts-stream.ts` 走 PCM 流，音频帧回来就排进 WebAudio 时间轴（`renderer/lib/pcm-player.ts`），第一帧就出声；起不来自动退回批式。免按键时开口即打断（播报时也听，折减 45% 防自触发）。实时通道 3% 硬预算已建好阀门，全双工对话仍未做 | speech-chunks.test 5、speech-player.test 4、dashscope-tts-stream.test 3、pcm-player.test 3 |
 | ~~取景框 / 虚拟光标~~ | voice 0 / 1 | **本轮不做**（2026-10-24）：等 Pi + MCP 的桌面控制稳定后再谈 | — |
 
 ## 三、怎么避免再次脱节

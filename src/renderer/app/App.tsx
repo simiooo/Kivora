@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+﻿import { useEffect, useRef } from "react";
 import { useBootstrap, useRoute } from "../lib/hooks.ts";
 import { bridge } from "../lib/bridge.ts";
 import { playClip, stopPlayback } from "../lib/audio.ts";
 import { SpeechPlayer } from "../lib/speech-player.ts";
+import { PcmPlayer } from "../lib/pcm-player.ts";
 import { ToastProvider, Spinner } from "../components/ui.tsx";
 import { TimelinePage } from "../pages/TimelinePage.tsx";
 import { HistoryPage } from "../pages/HistoryPage.tsx";
@@ -21,12 +22,24 @@ export default function App(): React.JSX.Element {
       () => bridge.speechDone(),
     ),
   );
+  // 流式合成（边合成边播）：PCM 帧直接排在 WebAudio 时间轴上
+  const pcm = useRef<PcmPlayer | null>(null);
 
   useEffect(() => {
     return bridge.subscribe((event) => {
       if (event.kind === "speech-stop") {
         player.current.clear();
+        pcm.current?.stop();
         stopPlayback(60);
+        return;
+      }
+      if (event.kind === "speech-pcm" && event.pcm && event.utteranceId) {
+        if (!pcm.current) {
+          pcm.current = new PcmPlayer({ sampleRate: event.sampleRate ?? 24_000, onIdle: () => bridge.speechDone() });
+        }
+        pcm.current.begin(event.utteranceId);
+        player.current.clear();
+        pcm.current.push(event.pcm);
         return;
       }
       if (event.kind === "speech" && event.speech?.audioBase64) {

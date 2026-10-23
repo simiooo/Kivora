@@ -7,6 +7,7 @@ export const CONFIG_DEFAULTS: AppConfig = {
   taskRuntime: "builtin",
   narration: true,
   ackEnabled: true,
+  streamSpeech: false,
   autoStop: true,
   autoStopSilenceMs: 800,
   handsFree: false,
