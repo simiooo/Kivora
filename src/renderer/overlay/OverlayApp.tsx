@@ -1,18 +1,29 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, Mic } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowUpRight, Mic, Square, X } from "lucide-react";
 import type { OverlayState } from "@shared/domain.ts";
 import { STATE_LABELS } from "@shared/domain.ts";
 import { formatHotkey, formatRelative, tailEllipsis } from "@shared/text.ts";
 import { bridge } from "../lib/bridge.ts";
 import { cn } from "../lib/utils.ts";
-import { usePresence } from "../lib/presence.ts";
 
 void (async (): Promise<void> => {
   document.documentElement.classList.add("overlay-window");
 })();
 
+/**
+ * 桌面悬浮窗：一个常驻的小 HUD。
+ *
+ * 三条规则：
+ * - 热键只是"把它叫出来"，之后它一直在，直到用户收起（× / Esc / 托盘）。
+ * - 头部的状态是唯一的说法（在听 / 在想 / 待命），按钮只说"现在能做什么"，
+ *   录音时按钮变成「停」，不再出现"在听"和"说一句"并列的矛盾。
+ * - 波纹跟着主窗上报的真实电平走，不是装饰动画。
+ */
 export function OverlayApp(): React.JSX.Element | null {
   const [state, setState] = useState<OverlayState | null>(null);
+  const [level, setLevel] = useState(0);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const lastHeight = useRef(0);
 
   const load = useCallback(async () => {
     try {
@@ -25,31 +36,30 @@ export function OverlayApp(): React.JSX.Element | null {
   useEffect(() => {
     void load();
     return bridge.subscribe((event) => {
+      if (event.kind === "voice") {
+        setLevel(event.level ?? 0);
+        return;
+      }
       if (["overlay", "approvals", "sessions", "queue"].includes(event.kind)) void load();
     });
   }, [load]);
 
-  const pending = state?.pendingApproval ?? null;
-  const active = Boolean(state?.listening || pending || (state?.queuedCount ?? 0) > 0 || state?.foreground);
-  const capsule = usePresence(Boolean(state?.listening), 140);
-  const [closing, setClosing] = useState(false);
-
-  // 没东西可显示时：先播退场，再让主进程把窗口收起来
-  useEffect(() => {
-    if (!state) return;
-    if (active) {
-      setClosing(false);
-      return;
-    }
-    setClosing(true);
-    const timer = window.setTimeout(() => {
-      setClosing(false);
-      void bridge.overlayHide();
-    }, 150);
-    return () => window.clearTimeout(timer);
-    // 只在"有没有东西要显示"变化时切换，不跟着每次状态刷新重播
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  // 窗口贴内容走：透明区域是实打实挡住底下点击的，别让它白白占一块
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const report = (): void => {
+      const rect = el.getBoundingClientRect().height;
+      const height = Math.ceil(Math.max(rect, el.scrollHeight)) + 24;
+      if (Math.abs(height - lastHeight.current) < 2) return;
+      lastHeight.current = height;
+      void bridge.overlayResize(height);
+    };
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [Boolean(state)]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -59,86 +69,89 @@ export function OverlayApp(): React.JSX.Element | null {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!state || (!active && !closing)) return null;
+  if (!state) return null;
+
+  const listening = state.listening;
+  const pending = state.pendingApproval;
+  const running = state.foreground;
+  const status = listening ? "在听" : running ? "在想" : "待命";
+  const empty = !pending && state.queuedCount === 0 && !running && !state.lastRun;
 
   return (
-    <div
-      className={cn(
-        "flex h-full flex-col justify-end gap-3 p-3",
-        closing ? "motion-exit-pop" : "motion-pop",
-      )}
-    >
-      {capsule.mounted ? (
-        <div
-          className={cn(
-            "flex h-14 shrink-0 items-center gap-3 rounded-full bg-[#1b1d1a] px-5 shadow-float",
-            capsule.closing ? "motion-exit-capsule" : "motion-capsule",
-          )}
-        >
-          <span className="size-2 rounded-full bg-acorn" />
-          <span className="text-[17px] font-medium text-foreground">在听</span>
-          <div className="flex items-end gap-[3px]">
-            {[0, 1, 2, 3, 4].map((index) => (
-              <span
-                key={index}
-                className={cn("w-[3px] rounded-full bg-acorn/80", index % 2 === 0 ? "h-4" : "h-6")}
-                style={{ animation: `wave 1.1s ease-in-out ${index * 0.09}s infinite` }}
-              />
-            ))}
-          </div>
-          <span className="ml-auto font-mono text-[12px] text-faint">
-            {formatHotkey(state.hotkey)}
+    <div className="motion-pop flex h-full flex-col justify-end p-3">
+      {/* shrink-0：窗口先短后长时卡片不能跟着被压扁，否则量到的永远是窗口高度 */}
+      <div ref={cardRef} className="shrink-0 overflow-hidden rounded-[18px] border border-white/5 bg-card shadow-float">
+        <div className="drag-region flex items-center gap-2 px-5 pt-4 pb-3" data-drag="1">
+          <span className="relative grid size-2 place-items-center">
+            <span className={cn("size-2 rounded-full", listening || running ? "bg-acorn" : "bg-faint")} />
+            {listening || running ? (
+              <span className="absolute size-2 animate-ping rounded-full bg-acorn opacity-40" />
+            ) : null}
           </span>
-        </div>
-      ) : null}
-
-      <div
-        className={cn(
-          "shrink-0 rounded-[18px] border border-white/5 bg-card p-5 shadow-float",
-          capsule.mounted ? "motion-rise" : "",
-        )}
-      >
-        <div className="drag-region mb-3 flex items-center gap-2" data-drag="1">
-          <span className="size-2 rounded-full bg-acorn" />
           <span className="text-[15px] font-medium">Kivora</span>
-          <span className="ml-auto text-[11px] text-faint">
-            {state.lastRun ? formatRelative(Date.now() - state.lastRun.ageMs) : "刚刚"}
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[11px]",
+              listening ? "bg-acorn/15 text-acorn" : running ? "bg-acorn/10 text-acorn/90" : "bg-muted text-faint",
+            )}
+          >
+            {status}
           </span>
-        </div>
-
-        <div className="mb-1 text-[11px] text-faint">最近</div>
-        <div
-          key={pending?.id ?? (state.queuedCount ? "queued" : "idle")}
-          className="motion-fade space-y-0.5"
-        >
-          {pending ? (
-            <Row label="待处理" value={`1 条待确认 · ${tailEllipsis(pending.title, 10)}`} accent />
-          ) : state.queuedCount > 0 ? (
-            <Row label="待处理" value={`${state.queuedCount} 条排队`} accent />
-          ) : null}
-          {state.foreground ? (
-            <Row label="在跑" value={tailEllipsis(state.foreground, 18)} detail={state.foregroundDetail ?? undefined} accent />
-          ) : null}
-          {state.selectedCount !== null ? <Row label="选中" value={`${state.selectedCount} 个文件`} /> : null}
-          {state.lastRun ? (
-            <Row
-              label="上次"
-              value={`${tailEllipsis(state.lastRun.title, 12)} · ${STATE_LABELS[state.lastRun.state]}`}
-            />
-          ) : null}
-          {!pending && state.queuedCount === 0 && !state.foreground && !state.lastRun ? (
-            <p className="py-2 text-[12px] text-faint">还没有在跑的事。</p>
-          ) : null}
-        </div>
-
-        <div className="no-drag mt-4 flex items-center gap-2">
+          <span className="ml-auto font-mono text-[11px] text-faint">{formatHotkey(state.hotkey)}</span>
           <button
             type="button"
-            onClick={() => void bridge.overlayAsk()}
-            className="flex h-9 items-center gap-1.5 rounded-[12px] bg-primary px-3.5 text-[13px] font-medium text-primary-foreground"
+            aria-label="收起"
+            onClick={() => void bridge.overlayHide()}
+            className="no-drag -mr-1 grid size-6 place-items-center rounded-full text-faint hover:bg-muted hover:text-foreground"
           >
-            <Mic className="size-3.5" /> 说一句
+            <X className="size-3.5" />
           </button>
+        </div>
+
+        {listening ? (
+          <div className="px-5 pb-4">
+            <Bars level={level} />
+            <p className="mt-2 text-[11px] text-faint">说完点「停」，或按 Esc 取消这一句</p>
+          </div>
+        ) : null}
+
+        <div className="px-5 pb-1">
+          <div className="mb-1 text-[11px] text-faint">最近</div>
+          <div key={pending?.id ?? (state.queuedCount ? "queued" : "idle")} className="motion-fade space-y-0.5">
+            {pending ? <Row label="待处理" value={`1 条待确认 · ${tailEllipsis(pending.title, 10)}`} accent /> : null}
+            {!pending && state.queuedCount > 0 ? <Row label="待处理" value={`${state.queuedCount} 条排队`} accent /> : null}
+            {running ? (
+              <Row label="在跑" value={tailEllipsis(running, 18)} detail={state.foregroundDetail ?? undefined} accent />
+            ) : null}
+            {state.selectedCount !== null ? <Row label="选中" value={`${state.selectedCount} 个文件`} /> : null}
+            {state.lastRun ? (
+              <Row
+                label="上次"
+                value={`${tailEllipsis(state.lastRun.title, 12)} · ${STATE_LABELS[state.lastRun.state]}`}
+              />
+            ) : null}
+            {empty ? <p className="py-2 text-[12px] text-faint">还没有在跑的事。</p> : null}
+          </div>
+        </div>
+
+        <div className="no-drag flex items-center gap-2 px-5 pt-3 pb-4">
+          {listening ? (
+            <button
+              type="button"
+              onClick={() => void bridge.overlayStopVoice()}
+              className="flex h-9 items-center gap-1.5 rounded-[12px] bg-acorn px-3.5 text-[13px] font-medium text-background"
+            >
+              <Square className="size-3 fill-current" /> 停
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void bridge.overlayAsk()}
+              className="flex h-9 items-center gap-1.5 rounded-[12px] bg-primary px-3.5 text-[13px] font-medium text-primary-foreground"
+            >
+              <Mic className="size-3.5" /> 说一句
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void bridge.overlayOpenMain()}
@@ -146,8 +159,32 @@ export function OverlayApp(): React.JSX.Element | null {
           >
             <ArrowUpRight className="size-3.5" /> 打开主窗
           </button>
+          <span className="ml-auto text-[11px] text-faint">
+            {state.lastRun ? formatRelative(Date.now() - state.lastRun.ageMs) : "刚刚"}
+          </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 16 根条，中间的更高；高度完全由实时电平决定，说话才会跳 */
+function Bars({ level }: { level: number }): React.JSX.Element {
+  const bars = 16;
+  return (
+    <div className="flex h-10 items-center gap-[3px]" aria-hidden>
+      {Array.from({ length: bars }, (_, index) => {
+        const center = 1 - Math.abs(index - (bars - 1) / 2) / ((bars - 1) / 2);
+        const weight = 0.32 + center * 0.68;
+        const height = Math.max(3, Math.round((3 + level * 34) * weight));
+        return (
+          <span
+            key={index}
+            className="w-[3px] rounded-full bg-acorn/85 transition-[height] duration-75 ease-out"
+            style={{ height }}
+          />
+        );
+      })}
     </div>
   );
 }

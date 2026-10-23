@@ -61,6 +61,7 @@ export type ChangeKind =
   | "models"
   | "config"
   | "overlay"
+  | "voice"
   | "speech"
   | "hotkey";
 
@@ -69,6 +70,8 @@ export interface ChangeEvent {
   at: number;
   /** speech 事件带内容 */
   speech?: SpeechClip & { id: string };
+  /** voice 事件带实时电平（0–1），悬浮窗的波纹照着它画 */
+  level?: number;
 }
 
 export const IPC = {
@@ -122,6 +125,11 @@ export const IPC = {
   overlayAsk: "kivora:overlay:ask",
   overlayOpenMain: "kivora:overlay:open-main",
   overlayHide: "kivora:overlay:hide",
+  overlayStopVoice: "kivora:overlay:stop-voice",
+  overlayResize: "kivora:overlay:resize",
+  voiceState: "kivora:voice:state",
+  voiceLevel: "kivora:voice:level",
+  voiceStop: "kivora:voice:stop",
   windowOpenSettings: "kivora:window:open-settings",
 
   changed: "kivora:changed",
@@ -188,7 +196,18 @@ export interface KivoraBridge {
   overlayAsk(): Promise<void>;
   overlayOpenMain(): Promise<void>;
   overlayHide(): Promise<void>;
+  /** 悬浮窗点「停」：让主窗结束录音 */
+  overlayStopVoice(): Promise<void>;
+  /** 悬浮窗按内容高度调整窗口，避免透明窗口挡住底下的点击 */
+  overlayResize(height: number): Promise<void>;
   openSettings(): Promise<void>;
+
+  /** 主窗上报录音状态——"在听"只跟着真实录音走，不靠猜 */
+  reportVoice(active: boolean): void;
+  /** 主窗上报实时电平（0–1），悬浮窗照着画波纹 */
+  reportLevel(level: number): void;
+  /** 主进程让主窗停下来（来自悬浮窗或后续的快捷键） */
+  onStopVoice(cb: () => void): () => void;
 }
 
 export interface McpProbeResult {

@@ -109,7 +109,18 @@ const api: KivoraBridge = {
   overlayAsk: () => invoke(IPC.overlayAsk),
   overlayOpenMain: () => invoke(IPC.overlayOpenMain),
   overlayHide: () => invoke(IPC.overlayHide),
+  overlayStopVoice: () => invoke(IPC.overlayStopVoice),
+  overlayResize: (height) => invoke(IPC.overlayResize, height),
   openSettings: () => invoke(IPC.windowOpenSettings),
+
+  // 电平/录音状态是高频、可丢的：用 send 而不是 invoke，别为每一帧等一个 Promise
+  reportVoice: (active) => ipcRenderer.send(IPC.voiceState, active),
+  reportLevel: (level) => ipcRenderer.send(IPC.voiceLevel, level),
+  onStopVoice: (cb) => {
+    const listener = (): void => cb();
+    ipcRenderer.on(IPC.voiceStop, listener);
+    return () => ipcRenderer.removeListener(IPC.voiceStop, listener);
+  },
 };
 
 contextBridge.exposeInMainWorld("kivora", api);

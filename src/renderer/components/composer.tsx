@@ -29,6 +29,19 @@ export function Composer({
   const [micId, setMicId] = useState<string>(() => window.localStorage.getItem("kivora.mic") ?? "");
   const recorder = useRef(new Recorder());
   const inputRef = useRef<HTMLInputElement>(null);
+  const lastLevelAt = useRef(0);
+
+  /**
+   * 电平既给主窗的波形，也上报给悬浮窗——悬浮窗是独立渲染进程，
+   * 拿不到这里的 AudioContext。约 25 帧/秒足够顺滑，又不至于刷爆 IPC。
+   */
+  const reportLevel = useCallback((value: number) => {
+    setLevel(value);
+    const now = performance.now();
+    if (now - lastLevelAt.current < 40) return;
+    lastLevelAt.current = now;
+    bridge.reportLevel(value);
+  }, []);
 
   useEffect(() => {
     void listMics().then((devices) => {
@@ -72,7 +85,7 @@ export function Composer({
     setRecording(true);
     setLevel(0);
     try {
-      await recorder.current.start(micId || undefined, setLevel);
+      await recorder.current.start(micId || undefined, reportLevel);
     } catch (err) {
       setRecording(false);
       toast.push({
@@ -89,6 +102,8 @@ export function Composer({
       return;
     }
     setRecording(false);
+    setLevel(0);
+    bridge.reportLevel(0);
     try {
       const clip = await recorder.current.stop();
       const transcript = await bridge.transcribe(clip.base64, clip.mime);
@@ -114,6 +129,7 @@ export function Composer({
     recorder.current.cancel();
     setRecording(false);
     setLevel(0);
+    bridge.reportLevel(0);
   }, []);
 
   useEffect(() => {
@@ -125,7 +141,26 @@ export function Composer({
 
   useEffect(() => {
     onListeningChange?.(recording);
+    // 主进程据此决定悬浮窗显不显示"在听"——只有真开着麦克风才算
+    bridge.reportVoice(recording);
   }, [recording, onListeningChange]);
+
+  // 组件卸载（切到设置页等）时把麦克风也关掉，别留一个"在听"的幽灵
+  useEffect(() => {
+    return () => {
+      recorder.current.cancel();
+      bridge.reportVoice(false);
+      bridge.reportLevel(0);
+    };
+  }, []);
+
+  // 悬浮窗点「停」：主进程转发过来，这里真的收尾
+  useEffect(() => {
+    return bridge.onStopVoice(() => {
+      if (recorder.current.active) void stopRecording();
+      else cancelRecording();
+    });
+  }, [cancelRecording, stopRecording]);
 
   // 阅读器里「引用到输入框」
   useEffect(() => {

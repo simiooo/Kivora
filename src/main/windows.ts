@@ -196,6 +196,29 @@ export function hideOverlay(): void {
   if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.hide();
 }
 
+const OVERLAY_WIDTH = 440;
+const OVERLAY_MARGIN = 20;
+
+/**
+ * 渲染层量完卡片高度后调这里：窗口贴着实内容走，别留一大片透明区域
+ * ——透明区域照样挡住底下的点击。底部锚定，缩放时卡片不会跳。
+ */
+export function resizeOverlay(height: number): void {
+  const win = getOverlayWindow();
+  if (!win) return;
+  const bounds = win.getBounds();
+  const display = screen.getDisplayMatching(bounds).workArea;
+  const nextHeight = Math.min(560, Math.max(140, Math.round(height)));
+  const bottom = bounds.y + bounds.height;
+  if (bounds.height === nextHeight && bounds.width === OVERLAY_WIDTH) return;
+  win.setBounds({
+    x: display.x + display.width - OVERLAY_WIDTH - OVERLAY_MARGIN,
+    y: Math.max(display.y, bottom - nextHeight),
+    width: OVERLAY_WIDTH,
+    height: nextHeight,
+  });
+}
+
 export function overlayIsVisible(): boolean {
   return Boolean(overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible());
 }

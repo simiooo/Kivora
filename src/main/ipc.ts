@@ -1,4 +1,4 @@
-import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+﻿import { BrowserWindow, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { IPC, type ModelPreset } from "../shared/ipc.ts";
 import type { AppConfig, ApprovalResolution, ModuleKey, OverlayState } from "../shared/domain.ts";
@@ -43,7 +43,7 @@ import { probeModel } from "./providers/probe.ts";
 import { mockMode } from "./env.ts";
 import { synthesizeSpeech, transcribeAudio } from "./voice.ts";
 import { broadcast } from "./bus.ts";
-import { focusMain, hideOverlay, refreshPermissionWindow, showOverlay } from "./windows.ts";
+import { focusMain, hideOverlay, refreshPermissionWindow, resizeOverlay } from "./windows.ts";
 import { findRunningSession } from "./repos/sessions.ts";
 
 const sessionId = z.string().regex(/^s_[0-9a-f]{8}$/, "会话 id 不合法");
@@ -440,17 +440,25 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.overlayAsk, () => {
     focusMain();
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes("index.html"));
+    // 录音状态由主窗自己上报（真打开麦克风才叫"在听"），悬浮窗不再收起来
     if (win) win.webContents.send(IPC.hotkeyPressed);
-    markListening(true);
-    hideOverlay();
   });
 
   handle(IPC.overlayOpenMain, () => {
     focusMain();
-    hideOverlay();
   });
 
   handle(IPC.overlayHide, () => hideOverlay());
+
+  handle(IPC.overlayStopVoice, () => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes("index.html"));
+    if (win) win.webContents.send(IPC.voiceStop);
+  });
+
+  handle(IPC.overlayResize, (_event, raw) => {
+    const height = typeof raw === "number" && Number.isFinite(raw) ? raw : 0;
+    if (height > 0) resizeOverlay(height);
+  });
 
   handle(IPC.windowOpenSettings, () => {
     focusMain();
@@ -458,7 +466,16 @@ export function registerIpc(deps: IpcDeps): void {
     if (win) win.webContents.send(IPC.navigate, "/settings");
   });
 
-  if (getConfig().onboardingDone) showOverlay();
+  // 悬浮窗由热键/托盘打开，常驻后由用户收起——启动时不自动出现
+
+  // 主窗上报的录音状态与电平：前者决定"在听"，后者喂悬浮窗的波纹
+  ipcMain.on(IPC.voiceState, (_event, value: unknown) => {
+    markListening(value === true);
+  });
+  ipcMain.on(IPC.voiceLevel, (_event, value: unknown) => {
+    const level = typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+    broadcast("voice", { level });
+  });
 }
 
 const PRESETS: ModelPreset[] = [

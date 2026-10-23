@@ -15,14 +15,14 @@ import {
   getMainWindow,
   getOverlayWindow,
   getPermissionWindow,
-  hideOverlay,
   markQuitting,
+  overlayIsVisible,
   refreshPermissionWindow,
   showOverlay,
   updateTrayStatus,
 } from "../src/main/windows.ts";
 import { markListening, normalizeAccelerator, registerIpc } from "../src/main/ipc.ts";
-import { setBroadcastHook } from "../src/main/bus.ts";
+import { broadcast, setBroadcastHook } from "../src/main/bus.ts";
 import { answerById, expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
 import { stopAllPiRuns } from "../src/main/dispatcher/pi-runner.ts";
 import { appendMessage, countSessions, listActiveSessions, listSessions } from "../src/main/repos/sessions.ts";
@@ -48,9 +48,12 @@ function bootLog(message: string): void {
 }
 
 bootLog(`boot v${app.getVersion()} packaged=${app.isPackaged} argv=${JSON.stringify(process.argv.slice(1))}`);
-let hideTimer: NodeJS.Timeout | null = null;
 
 if (isShots || isFlow || isSmoke) {
+  // 截图/自检时窗口会被判定为"被遮挡"，Chromium 就停掉重绘和动画，
+  // 截出来的是旧帧（波纹、状态都不更新）。只在自检里关掉这个省电策略。
+  app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
   const shotsDir = path.join(app.getPath("temp"), isFlow ? "kivora-flow" : "kivora-shots");
   fs.rmSync(shotsDir, { recursive: true, force: true });
   fs.mkdirSync(shotsDir, { recursive: true });
@@ -68,13 +71,9 @@ function registerHotkey(accelerator: string): { ok: boolean; hotkey: string } {
         win.focus();
         win.webContents.send(IPC.hotkeyPressed);
       }
-      markListening(true);
+      // 悬浮窗是常驻 HUD：热键只负责叫出来，"在听"由主窗的真实录音状态驱动，
+      // 收起要靠用户（× / Esc / 托盘菜单），不再到点自动消失
       showOverlay();
-      if (hideTimer) clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => {
-        markListening(false);
-        hideOverlay();
-      }, 5000);
     });
   } catch (err) {
     console.warn("[kivora] hotkey register threw", err);
@@ -147,15 +146,22 @@ async function capture(win: BrowserWindow | null, file: string): Promise<void> {
     console.warn(`[kivora] shot skipped ${file}: no window`);
     return;
   }
-  try {
-    const image = await win.webContents.capturePage();
-    const outDir = path.join(process.cwd(), "artifacts");
-    fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(path.join(outDir, file), image.toPNG());
-    console.log(`[kivora] shot ${file}`);
-  } catch (err) {
-    // 透明窗口在部分显卡驱动上会抛 UnknownVizError，截图失败不该拖住应用
-    console.warn(`[kivora] shot failed ${file}:`, err instanceof Error ? err.message : err);
+  // 透明窗口在部分显卡驱动上会抛 UnknownVizError，重试一次多半就好
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const image = await win.webContents.capturePage();
+      const outDir = path.join(process.cwd(), "artifacts");
+      fs.mkdirSync(outDir, { recursive: true });
+      fs.writeFileSync(path.join(outDir, file), image.toPNG());
+      console.log(`[kivora] shot ${file}`);
+      return;
+    } catch (err) {
+      if (attempt === 2) {
+        console.warn(`[kivora] shot failed ${file}:`, err instanceof Error ? err.message : err);
+        return;
+      }
+      await wait(160);
+    }
   }
 }
 
@@ -258,17 +264,25 @@ async function runShots(): Promise<void> {
 
   await loadRoute(win, "");
   await wait(600);
+  // 悬浮窗是常驻 HUD：截图时喂一个真实电平，波纹才不是摆拍
   markListening(true);
   showOverlay();
-  await wait(50);
+  // 波纹是照着主窗上报的电平画的：连喂几帧，截出来的才是"在说话"的样子
+  for (const level of [0.32, 0.61, 0.84, 0.58, 0.78]) {
+    broadcast("voice", { level });
+    await wait(90);
+  }
   const overlayEarly = await probeMotion(getOverlayWindow());
-  await wait(360);
+  await wait(320);
   const overlayLate = await probeMotion(getOverlayWindow());
   console.log(`[kivora] motion overlay early=${JSON.stringify(overlayEarly)} late=${JSON.stringify(overlayLate)}`);
   await capture(getOverlayWindow(), "shot-06-overlay.png");
   markListening(false);
-  const overlayExit = await probeExit(getOverlayWindow());
-  console.log(`[kivora] motion overlay exit=${JSON.stringify(overlayExit)}`);
+  broadcast("voice", { level: 0 });
+  // 常驻验证：空闲 5.5 秒（超过以前的自动收起阈值）后窗口仍在
+  await wait(5500);
+  console.log(`[kivora] overlay persists while idle=${overlayIsVisible()}`);
+  await capture(getOverlayWindow(), "shot-06b-overlay-idle.png");
   await wait(120);
 
   refreshPermissionWindow();
@@ -382,10 +396,9 @@ app.whenReady().then(async () => {
   const hotkey = normalizeAccelerator(getConfig().hotkey);
   app.setLoginItemSettings({ openAtLogin: getConfig().launchAtLogin });
   registerHotkey(hotkey);
+  // 悬浮窗不随启动出现：热键叫出来后就常驻（托盘菜单也能手动开关）
   createMainWindow();
   createTray();
-
-  if (getConfig().onboardingDone) showOverlay();
 
   setInterval(() => {
     const expired = expireApprovals();
