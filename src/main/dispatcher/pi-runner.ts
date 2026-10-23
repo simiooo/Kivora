@@ -514,6 +514,10 @@ export function startPiRun(session: Session, hooks: PiRunHooks): void {
   });
 }
 
+export function stopAllPiRuns(): void {
+  for (const sessionId of [...runs.keys()]) cancelPiRun(sessionId);
+}
+
 export function cancelPiRun(sessionId: string): void {
   const run = runs.get(sessionId);
   if (!run) return;

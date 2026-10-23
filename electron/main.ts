@@ -24,6 +24,7 @@ import {
 import { markListening, normalizeAccelerator, registerIpc } from "../src/main/ipc.ts";
 import { setBroadcastHook } from "../src/main/bus.ts";
 import { expireApprovals } from "../src/main/dispatcher/approval-bus.ts";
+import { stopAllPiRuns } from "../src/main/dispatcher/pi-runner.ts";
 import { appendMessage, countSessions, listActiveSessions, listSessions } from "../src/main/repos/sessions.ts";
 import { pendingApprovals } from "../src/main/repos/approvals.ts";
 import { seedDemoData } from "../src/main/demo.ts";
@@ -310,6 +311,7 @@ app.on("before-quit", () => {
 });
 
 app.on("will-quit", () => {
+  stopAllPiRuns();
   globalShortcut.unregisterAll();
   destroyTray();
   closeStore();
