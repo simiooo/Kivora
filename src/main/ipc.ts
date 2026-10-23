@@ -456,8 +456,8 @@ export function registerIpc(deps: IpcDeps): void {
 }
 
 const PRESETS: ModelPreset[] = [
-  { label: "OpenAI", provider: "openai", baseUrl: "https://api.openai.com/v1", capability: "chat", modelId: "gpt-4.1-mini" },
   { label: "DeepSeek", provider: "openai", baseUrl: "https://api.deepseek.com/v1", capability: "chat", modelId: "deepseek-chat" },
+  { label: "OpenAI", provider: "openai", baseUrl: "https://api.openai.com/v1", capability: "chat", modelId: "gpt-4.1-mini" },
   {
     label: "Anthropic",
     provider: "anthropic",
@@ -480,6 +480,42 @@ const PRESETS: ModelPreset[] = [
     modelId: "Qwen/Qwen2.5-72B-Instruct",
   },
   { label: "本地 Ollama", provider: "custom", baseUrl: "http://127.0.0.1:11434/v1", capability: "chat", modelId: "qwen2.5" },
+  // 语音：Qwen Audio 3.1 系列（阿里百炼 OpenAI 兼容端点）
+  {
+    label: "Qwen ASR（短音频）",
+    provider: "openai",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    capability: "asr",
+    modelId: "qwen-audio-3.1-asr-flash-message",
+  },
+  {
+    label: "Qwen ASR（长文件）",
+    provider: "openai",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    capability: "asr",
+    modelId: "qwen-audio-3.1-asr-flash-filetrans",
+  },
+  {
+    label: "Qwen TTS（低延迟）",
+    provider: "openai",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    capability: "tts",
+    modelId: "qwen-audio-3.1-tts-flash",
+  },
+  {
+    label: "Qwen TTS Next",
+    provider: "openai",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    capability: "tts",
+    modelId: "qwen-audio-3.1-tts-next",
+  },
+  {
+    label: "Qwen 实时语音",
+    provider: "openai",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    capability: "asr",
+    modelId: "qwen-audio-3.1-realtime-plus",
+  },
   { label: "Whisper", provider: "openai", baseUrl: "https://api.openai.com/v1", capability: "asr", modelId: "whisper-1" },
   { label: "OpenAI TTS", provider: "openai", baseUrl: "https://api.openai.com/v1", capability: "tts", modelId: "tts-1" },
 ];

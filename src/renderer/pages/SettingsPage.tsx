@@ -72,7 +72,7 @@ export function SettingsPage({
       </aside>
 
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[760px] px-10 pb-16 pt-8">
+        <div className="mx-auto w-full max-w-[760px] px-10 pb-16 pt-12">
           {active === "models" ? <ModelsPanel /> : null}
           {active === "general" ? <GeneralSection bootstrap={bootstrap} onConfig={onConfig} /> : null}
           {active === "voice" ? <VoiceSection bootstrap={bootstrap} onConfig={onConfig} /> : null}

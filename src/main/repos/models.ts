@@ -206,34 +206,79 @@ export function bindModel(module: ModuleKey, modelId: string | null): Binding[] 
 
 /* ------------------------------------------------------------ 种子 */
 
+const DASHSCOPE = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+
+/**
+ * 默认栈：调度/任务用 DeepSeek，识别/合成用 Qwen Audio 3.1。
+ * 语音这组里：
+ * - asr-flash-message 面向"一句话一条消息"的短音频，正好是我们按次上传的 clip
+ * - tts-flash 是低延迟合成，首响优先
+ * - filetrans 是长音频文件、realtime-plus 是流式、tts-next 是下一代，留作预设不设默认
+ */
 export function seedModels(): void {
   if (countModels() > 0) return;
   const seeds: Array<Omit<ModelDraft, "apiKey">> = [
     {
-      name: "gpt-4.1-mini",
+      name: "DeepSeek Chat",
       provider: "openai",
       capability: "chat",
-      baseUrl: "https://api.openai.com/v1",
-      modelId: "gpt-4.1-mini",
+      baseUrl: "https://api.deepseek.com/v1",
+      modelId: "deepseek-chat",
       params: { ...DEFAULT_PARAMS },
       headers: [],
     },
     {
-      name: "whisper-1",
+      name: "Qwen ASR",
       provider: "openai",
       capability: "asr",
-      baseUrl: "https://api.openai.com/v1",
-      modelId: "whisper-1",
+      baseUrl: DASHSCOPE,
+      modelId: "qwen-audio-3.1-asr-flash-message",
       params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null },
       headers: [],
     },
     {
-      name: "tts-1",
+      name: "Qwen TTS",
       provider: "openai",
       capability: "tts",
-      baseUrl: "https://api.openai.com/v1",
-      modelId: "tts-1",
-      params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null, voice: "alloy", speed: 1 },
+      baseUrl: DASHSCOPE,
+      modelId: "qwen-audio-3.1-tts-flash",
+      params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null, voice: "Cherry", speed: 1 },
+      headers: [],
+    },
+    {
+      name: "DeepSeek Reasoner",
+      provider: "openai",
+      capability: "chat",
+      baseUrl: "https://api.deepseek.com/v1",
+      modelId: "deepseek-reasoner",
+      params: { ...DEFAULT_PARAMS, maxTokens: 8192 },
+      headers: [],
+    },
+    {
+      name: "Qwen 文件转写",
+      provider: "openai",
+      capability: "asr",
+      baseUrl: DASHSCOPE,
+      modelId: "qwen-audio-3.1-asr-flash-filetrans",
+      params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null },
+      headers: [],
+    },
+    {
+      name: "Qwen TTS Next",
+      provider: "openai",
+      capability: "tts",
+      baseUrl: DASHSCOPE,
+      modelId: "qwen-audio-3.1-tts-next",
+      params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null, voice: "Cherry", speed: 1 },
+      headers: [],
+    },
+    {
+      name: "Qwen 实时语音",
+      provider: "openai",
+      capability: "asr",
+      baseUrl: DASHSCOPE,
+      modelId: "qwen-audio-3.1-realtime-plus",
+      params: { ...DEFAULT_PARAMS, temperature: null, maxTokens: null },
       headers: [],
     },
     {
@@ -263,5 +308,5 @@ export function seedModels(): void {
   bindModel("brain", ids[0]);
   bindModel("asr", ids[1]);
   bindModel("tts", ids[2]);
-  bindModel("task", ids[3]);
+  bindModel("task", ids[0]);
 }

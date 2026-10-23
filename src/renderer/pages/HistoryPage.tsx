@@ -172,7 +172,7 @@ export function HistoryPage({
       </aside>
 
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[760px] px-10 pb-16 pt-4">
+        <div className="mx-auto w-full max-w-[760px] px-10 pb-16 pt-12">
           {!selectedId ? (
             <Empty title="从左边选一个会话" hint="每个会话都有完整的事件流和对话。" />
           ) : detail.loading && !detail.data ? (

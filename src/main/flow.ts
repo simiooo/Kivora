@@ -114,7 +114,7 @@ export async function runFlow(): Promise<number> {
 
   // 9. 模型仓库的边界
   const models = listModels();
-  check("种子模型 5 个", models.length === 5, String(models.length));
+  check("种子模型 9 个", models.length === 9, String(models.length));
   const chatModels = models.filter((model) => model.capability === "chat");
   const bindingsBefore = listBindings();
   bindModel("brain", chatModels[1].id);

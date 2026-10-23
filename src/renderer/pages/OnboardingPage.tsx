@@ -33,7 +33,7 @@ export function OnboardingPage({
   return (
     <div className="flex h-full flex-col bg-background">
       {/* 引导页没有自己的标题栏，留一条整宽的拖拽带 */}
-      <div className="drag-region h-9 w-full shrink-0" data-drag="1" />
+      <div className="drag-region h-11 w-full shrink-0" data-drag="1" />
       <div className="flex min-h-0 flex-1">
       <aside className="flex w-[340px] shrink-0 flex-col border-r border-border/60 px-8 pb-8">
         <div className="mb-10 flex items-center gap-2">
@@ -144,8 +144,8 @@ function ConnectStep({
   onModel: (model: ModelRecord) => void;
 }): React.JSX.Element {
   const toast = useToast();
-  const [baseUrl, setBaseUrl] = useState("https://api.openai.com/v1");
-  const [modelId, setModelId] = useState("gpt-4.1-mini");
+  const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com/v1");
+  const [modelId, setModelId] = useState("deepseek-chat");
   const [apiKey, setApiKey] = useState("");
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
