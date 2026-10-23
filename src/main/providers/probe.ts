@@ -26,7 +26,13 @@ export async function probeModel(model: ModelRecord, apiKey: string | null, mock
       throw new AppError("key_missing", { message: "这个模型还没有填 API Key。" });
     }
     if (model.capability === "chat") {
-      await chatCompletion(model, apiKey, [{ role: "user", content: "ping" }], { maxTokens: 1, temperature: 0 });
+      // 只验证通路：有些模型默认开思考模式，max_tokens 很小时正文可能为空，
+      // 那也算连上了——能返回 200 就说明地址、Key、模型 ID 都对。
+      await chatCompletion(model, apiKey, [{ role: "user", content: "ping" }], {
+        maxTokens: 16,
+        temperature: 0,
+        allowEmpty: true,
+      });
     } else if (model.provider === "dashscope") {
       if (model.capability === "asr") {
         await transcribeViaWebSocket({

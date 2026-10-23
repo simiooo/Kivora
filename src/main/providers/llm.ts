@@ -98,7 +98,7 @@ export async function chatCompletion(
   model: ModelRecord,
   apiKey: string | null,
   turns: ChatTurn[],
-  options: { tools?: ToolDef[]; signal?: AbortSignal; maxTokens?: number; temperature?: number } = {},
+  options: { tools?: ToolDef[]; signal?: AbortSignal; maxTokens?: number; temperature?: number; allowEmpty?: boolean } = {},
 ): Promise<ChatResult> {
   const startedAt = Date.now();
   const headers: Record<string, string> = {
@@ -162,7 +162,7 @@ export async function chatCompletion(
     signal: options.signal,
   });
   const parsed = parseOpenAi(response.json<unknown>());
-  if (!parsed.text && parsed.toolCalls.length === 0) {
+  if (!parsed.text && parsed.toolCalls.length === 0 && !options.allowEmpty) {
     throw new AppError("bad_response", { message: "模型没返回内容，可能不是兼容接口。" });
   }
   return { ...parsed, latencyMs: Date.now() - startedAt };
